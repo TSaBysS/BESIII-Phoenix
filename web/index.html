@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BESIII Phoenix Quick Check</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #111; color: #eee; font-family: Arial, sans-serif; overflow: hidden; }
+      body { display: flex; flex-direction: column; }
+      #toolbar {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 30;
+        padding: 8px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 10px;
+        background: rgba(14, 19, 28, 0.84);
+        backdrop-filter: blur(4px);
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      #viewer { flex: 1 1 auto; min-height: 0; width: 100%; }
+      #appLoader {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+          radial-gradient(circle at 50% 35%, rgba(130, 195, 255, 0.14) 0%, rgba(130, 195, 255, 0.04) 38%, rgba(14, 22, 38, 0.96) 72%),
+          #0b111c;
+        transition: opacity 0.35s ease, visibility 0.35s ease;
+      }
+      #appLoader.load-complete {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .loader-card {
+        min-width: 320px;
+        max-width: 86vw;
+        padding: 18px 20px 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(16, 24, 38, 0.86);
+        text-align: center;
+        color: #dbe7ff;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      }
+      .loader-logo-main {
+        width: 74px;
+        height: 74px;
+        animation: appLoaderPulse 1.9s ease-in-out infinite;
+      }
+      .loader-logo-text {
+        margin-top: 10px;
+        width: 150px;
+        height: auto;
+        opacity: 0.95;
+      }
+      .loader-spinner {
+        margin: 14px auto 10px;
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        border: 3px solid rgba(120, 166, 230, 0.2);
+        border-top-color: rgba(120, 166, 230, 0.95);
+        border-left-color: rgba(120, 166, 230, 0.55);
+        animation: appLoaderSpin 1.1s linear infinite;
+      }
+      .loader-status {
+        font-size: 13px;
+        margin: 6px 0 10px;
+      }
+      .loader-progress {
+        width: 210px;
+        max-width: 70vw;
+        height: 8px;
+        margin: 0 auto;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.12);
+      }
+      .loader-progress > span {
+        display: block;
+        height: 100%;
+        width: 18%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #4d9dff 0%, #66e3d0 100%);
+        transition: width 0.4s ease;
+      }
+      #lhcbMenu {
+        position: fixed;
+        right: 16px;
+        top: 88px;
+        z-index: 31;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .menu-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(20, 28, 40, 0.9);
+        color: #d7e7ff;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .menu-btn:hover { background: rgba(44, 63, 92, 0.95); }
+      #opacityPanel {
+        position: fixed;
+        right: 16px;
+        top: 280px;
+        z-index: 31;
+        width: 220px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(20, 28, 40, 0.92);
+        color: #d7e7ff;
+        display: none;
+      }
+      #opacityPanel.open { display: block; }
+      .opacity-row { margin-top: 8px; font-size: 12px; }
+      .opacity-row input { width: 100%; }
+      #eventPanel {
+        position: fixed;
+        left: 12px;
+        top: 92px;
+        z-index: 31;
+        width: 220px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(20, 28, 40, 0.92);
+        color: #d7e7ff;
+      }
+      #eventSelect { width: 100%; margin-top: 6px; }
+      #trackHoverTip {
+        position: fixed;
+        z-index: 40;
+        pointer-events: none;
+        background: rgba(15, 22, 34, 0.94);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        color: #e9f2ff;
+        padding: 4px 8px;
+        font-size: 12px;
+        display: none;
+      }
+      #trackInfoPanel {
+        position: fixed;
+        left: 18px;
+        bottom: 18px;
+        z-index: 35;
+        width: 320px;
+        max-height: 46vh;
+        overflow: auto;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(20, 28, 40, 0.95);
+        color: #d7e7ff;
+        display: none;
+      }
+      #trackInfoPanel.open { display: block; }
+      #trackInfoPanel h4 { margin: 0 0 6px 0; font-size: 14px; }
+      #trackInfoPanel .kv { font-size: 12px; margin: 3px 0; }
+      #trackInfoPanel .pid { font-size: 12px; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 6px; }
+      #trackInfoPanel.flash {
+        box-shadow: 0 0 0 2px rgba(180, 195, 215, 0.9), 0 0 18px rgba(180, 195, 215, 0.45);
+      }
+      #bes3LogoBadge {
+        position: fixed;
+        right: 14px;
+        bottom: 14px;
+        z-index: 20;
+        pointer-events: none;
+        opacity: 0.82;
+      }
+      #bes3LogoBadge img {
+        display: block;
+        width: 96px;
+        height: auto;
+      }
+      #timelinePanel {
+        position: fixed;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        z-index: 31;
+        min-width: 420px;
+        padding: 8px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(20, 28, 40, 0.92);
+        color: #d7e7ff;
+        display: none;
+        gap: 10px;
+        align-items: center;
+      }
+      #timelinePanel.open { display: flex; }
+      #timelineSlider { width: 260px; }
+      #timelineTime { min-width: 76px; text-align: right; font-size: 12px; color: #9fc2ff; }
+      .ok { color: #72e072; }
+      .warn { color: #ffcc66; }
+      .err { color: #ff8888; }
+      code {
+        color: #9ad0ff;
+        display: inline-block;
+        max-width: 45vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: bottom;
+      }
+      @keyframes appLoaderSpin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes appLoaderPulse {
+        0%, 100% { transform: scale(0.92); opacity: 0.86; }
+        50% { transform: scale(1.0); opacity: 1; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="appLoader">
+      <div class="loader-card">
+        <img class="loader-logo-main" src="./assets/logo-small.svg" alt="Phoenix logo" />
+        <div><img class="loader-logo-text" src="./assets/logo-text.svg" alt="Phoenix Event Display" /></div>
+        <div class="loader-spinner" aria-hidden="true"></div>
+        <div id="loaderStatus" class="loader-status">Initializing...</div>
+        <div class="loader-progress"><span id="loaderProgressBar"></span></div>
+      </div>
+    </div>
+    <div id="toolbar">
+      <span>BESIII Phoenix</span>
+      <span id="status" class="warn" style="margin-left: 12px;">Initializing...</span>
+      <span style="margin-left: 12px;">JSON: <code id="jsonPath"></code></span>
+      <label style="margin-left: 12px;">
+        Track mode:
+        <select id="trackModeSelect">
+          <option value="stable" selected>stable</option>
+          <option value="helix5">helix5</option>
+          <option value="both">both</option>
+        </select>
+      </label>
+      <label id="mcTruthWrap" style="margin-left: 12px; display: none;">
+        <input type="checkbox" id="chkMcTruth" />
+        MC truth
+      </label>
+    </div>
+    <div id="lhcbMenu">
+      <button id="btnOpacityMenu" class="menu-btn" title="Detector opacity">OP</button>
+      <button id="btnResetCamera" class="menu-btn" title="Reset camera">CAM</button>
+      <button id="btnTimelineMenu" class="menu-btn" title="Timeline">TL</button>
+      <button id="btnPidMode" class="menu-btn" title="PID pick mode">PID</button>
+      <button id="btnTruthMode" class="menu-btn" title="MC truth tracks" style="display:none;">TRU</button>
+    </div>
+    <div id="opacityPanel">
+      <div><strong>Detector Opacity</strong></div>
+      <div class="opacity-row">MDC <input id="alphaMdc" type="range" min="0" max="1" step="0.05" value="1.00" /></div>
+      <div class="opacity-row">TOF <input id="alphaTof" type="range" min="0" max="1" step="0.05" value="1.00" /></div>
+      <div class="opacity-row">MUC <input id="alphaMuc" type="range" min="0" max="1" step="0.05" value="1.00" /></div>
+      <div class="opacity-row">EMC <input id="alphaEmc" type="range" min="0" max="1" step="0.05" value="0.10" /></div>
+    </div>
+    <div id="eventPanel">
+      <div><strong>Event Selector</strong></div>
+      <select id="eventSelect"></select>
+    </div>
+    <div id="timelinePanel">
+      <button id="btnTimelinePlay" class="menu-btn" title="Play/Pause timeline">▶</button>
+      <input id="timelineSlider" type="range" min="0" max="1000" step="1" value="0" />
+      <span id="timelineTime">0.00 ns</span>
+    </div>
+    <div id="bes3LogoBadge">
+      <img src="./assets/bes3-logo-rotated.png" alt="BESIII logo" />
+    </div>
+    <div id="trackHoverTip"></div>
+    <div id="trackInfoPanel"></div>
+    <div id="viewer"></div>
+
+    <script src="./geometries.js"></script>
+    <script src="./config.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three/three.module.min.js"
+        }
+      }
+    </script>
+    <script type="module">
+      import(`./app.js?v=${Date.now()}`);
+    </script>
+  </body>
+</html>

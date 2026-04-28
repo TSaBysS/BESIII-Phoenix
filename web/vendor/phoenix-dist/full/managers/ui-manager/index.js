@@ -1,0 +1,507 @@
+import Stats from 'three/examples/jsm/libs/stats.module.js';
+import { ClippingSetting, } from '../../lib/models/preset-view.model';
+import { SceneManager } from '../three-manager/scene-manager';
+import { StateManager } from '../../managers/state-manager';
+import { loadFile, saveFile } from '../../helpers/file';
+import { DatGUIMenuUI } from './dat-gui-ui';
+import { PhoenixMenuUI } from './phoenix-menu/phoenix-menu-ui';
+import { getFromLocalStorage, setToLocalStorage, } from '../../helpers/browser-storage';
+/** If animation presets not passed in configuration, we will use this. */
+const defaultAnimationPresets = [
+    {
+        name: 'Cavern to ID',
+        positions: [
+            {
+                position: [66388.95051168812, 5264.228603228927, -46910.7848593543],
+                duration: 1000,
+            },
+            {
+                position: [12834.18729094943, 677.7571205763458, 135.68755273443463],
+                duration: 2000,
+            },
+            {
+                position: [312.02688693297375, 25.884223757326, 270.10019006776236],
+                duration: 3500,
+            },
+            {
+                position: [263.3640855132258, 19.874838262525053, -318.16541790248885],
+                duration: 3000,
+            },
+            {
+                position: [5534.140362338047, 234.03507981484574, -2933.619479808285],
+                duration: 2000,
+            },
+            {
+                position: [2681.277288705242, 646.5795158318147, 5628.5248735111745],
+                duration: 1000,
+            },
+            {
+                position: [-6062.586283740076, 790.5876682946184, 1381.1675900848818],
+                duration: 1000,
+            },
+            {
+                position: [-1766.7693725879053, 1007.1048030984678, -5928.901341784575],
+                duration: 1000,
+            },
+            {
+                position: [12814.982506255355, 2516.987185037266, -22891.902734328327],
+                duration: 1000,
+            },
+        ],
+        animateEventAfterInterval: 5000,
+        collisionDuration: 6000,
+    },
+];
+/**
+ * Manager for UI related operations including the dat.GUI menu, stats-js and theme settings.
+ */
+export class UIManager {
+    /**
+     * Constructor for the UI manager.
+     * @param three Three manager to perform three.js related operations.
+     */
+    constructor(three) {
+        this.three = three;
+        // Functions ending in PM are for Phoenix Menu
+        /** The dat.GUI menu UI. A wrapper for dat.GUI menu to perform UI related operations. */
+        this.uiMenus = [];
+        /** If the geometry folder is added or not */
+        this.geomFolderAdded = false;
+        /** If the labels folder is added or not */
+        this.labelsFolderAdded = false;
+    }
+    /**
+     * Show/load the UI including stats, the dat.GUI menu and theme.
+     * @param configuration Configuration options for preset views and event data loader.
+     */
+    init(configuration) {
+        // Clear the existing UI
+        this.clearUI();
+        // Set the configuration
+        this.configuration = configuration;
+        // Shows a panel on screen with information about the performance (fps).
+        this.showStats(configuration.elementId);
+        // UI Menus
+        this.uiMenus = [];
+        if (configuration.enableDatGUIMenu) {
+            this.uiMenus.push(new DatGUIMenuUI(configuration.elementId, this.three));
+        }
+        if (configuration.phoenixMenuRoot) {
+            this.uiMenus.push(new PhoenixMenuUI(configuration.phoenixMenuRoot, this.three));
+        }
+        if (!configuration.forceColourTheme) {
+            // Detect UI color scheme
+            this.detectColorScheme();
+        }
+        else {
+            this.setDarkTheme(configuration.forceColourTheme.toLocaleLowerCase() == 'dark');
+        }
+        // State manager
+        this.stateManager = new StateManager();
+        if (configuration.phoenixMenuRoot) {
+            this.stateManager.setPhoenixMenuRoot(configuration.phoenixMenuRoot);
+        }
+    }
+    /**
+     * Show stats including FPS, milliseconds to render a frame, allocated memory etc.
+     * @param elementId ID of the wrapper element.
+     */
+    showStats(elementId = 'eventDisplay') {
+        this.stats = new Stats();
+        this.stats.showPanel(0);
+        this.stats.dom.className = 'ui-element';
+        this.stats.dom.id = 'statsElement';
+        this.stats.domElement.style.cssText =
+            'position: absolute; left: 0px; cursor: pointer; opacity: 0.9; z-index: 10; bottom: 0px;';
+        let canvas = document.getElementById(elementId);
+        if (canvas == null) {
+            canvas = document.body;
+        }
+        canvas.appendChild(this.stats.dom);
+    }
+    /**
+     * Update the UI by updating stats for each frame.
+     */
+    updateUI() {
+        this.stats.update();
+    }
+    /**
+     * Clear the UI by removing the dat.GUI and phoenix menu(s).
+     */
+    clearUI() {
+        this.uiMenus.forEach((menu) => menu.clear());
+        this.geomFolderAdded = false;
+        this.labelsFolderAdded = false;
+    }
+    /**
+     * Add geometry (detector geometry) folder to the dat.GUI and Phoenix menu.
+     */
+    addGeomFolder() {
+        this.geomFolderAdded = true;
+        this.uiMenus.forEach((menu) => menu.addGeometryFolder());
+    }
+    /**
+     * Add geometry to the menus geometry folder and set up its configurable options.
+     * @param object Object to add to the UI menu.
+     * @param menuSubfolder Subfolder in the menu to add the geometry to. Example `Folder > Subfolder`.
+     */
+    addGeometry(object, menuSubfolder) {
+        if (!this.geomFolderAdded) {
+            this.addGeomFolder();
+        }
+        this.uiMenus.forEach((menu) => menu.addGeometry(object, menuSubfolder));
+    }
+    /**
+     * Functions for event data toggles like show/hide and depthTest.
+     */
+    addEventDataFolder() {
+        this.uiMenus.forEach((menu) => menu.addEventDataFolder());
+    }
+    /**
+     * Add folder for event data type like tracks or hits to the dat.GUI and Phoenix menu.
+     * @param typeName Name of the type of event data.
+     * @returns dat.GUI and Phoenix menu's folder for event data type.
+     */
+    addEventDataTypeFolder(typeName) {
+        this.uiMenus.forEach((menu) => menu.addEventDataTypeFolder(typeName));
+    }
+    /**
+     * Add collection folder and its configurable options to the event data type (tracks, hits etc.) folder.
+     * @param eventDataType Name of the event data type.
+     * @param collectionName Name of the collection to be added in the type of event data (tracks, hits etc.).
+     * @param cuts Cuts to the collection of event data that are to be made configurable to filter event data.
+     */
+    addCollection(eventDataType, collectionName, cuts, collectionColor) {
+        this.uiMenus.forEach((menu) => menu.addCollection(eventDataType, collectionName, cuts, collectionColor));
+    }
+    /**
+     * Add labels folder to dat.GUI and Phoenix menu.
+     */
+    addLabelsFolder() {
+        const sceneManager = this.three.getSceneManager();
+        this.labelsFolderAdded = true;
+        // Common functions for Phoenix and dat.GUI menus
+        const onToggle = (toggleValue) => {
+            sceneManager.objectVisibility(sceneManager.getObjectByName(SceneManager.LABELS_ID), toggleValue);
+        };
+        const onSizeChange = (scale) => {
+            const labels = sceneManager.getObjectByName(SceneManager.LABELS_ID);
+            sceneManager.scaleObject(labels, scale);
+        };
+        const onColorChange = (value) => {
+            const labels = sceneManager.getObjectByName(SceneManager.LABELS_ID);
+            sceneManager.changeObjectColor(labels, value);
+        };
+        const onSaveLabels = () => {
+            const labelsObject = this.configuration?.eventDataLoader?.getLabelsObject();
+            if (labelsObject) {
+                saveFile(JSON.stringify(labelsObject), 'phoenix-labels.json');
+            }
+        };
+        const onLoadLabels = () => {
+            this.loadLabelsFile();
+        };
+        this.uiMenus.forEach((menu) => menu.addLabelsFolder({
+            onToggle,
+            onSizeChange,
+            onColorChange,
+            onSaveLabels,
+            onLoadLabels,
+        }));
+    }
+    /**
+     * Add configuration UI for label.
+     * @param labelId Unique ID of the label.
+     */
+    addLabel(labelId) {
+        if (!this.labelsFolderAdded) {
+            this.addLabelsFolder();
+        }
+        this.uiMenus.forEach((menu) => menu?.addLabel(labelId, () => this.removeLabel(labelId)));
+    }
+    /**
+     * Remove label from UI, scene and event data loader if it exists.
+     * @param labelId A unique label ID string.
+     * @param removeFolders Whether to remove label folders from dat.GUI and Phoenix menu.
+     */
+    removeLabel(labelId, removeFolders) {
+        this.three.getSceneManager().removeLabel(labelId);
+        const objectKeys = labelId.split(' > ');
+        // labelsObject[EventDataType][Collection][Index]
+        const labelsObject = this.configuration.eventDataLoader?.getLabelsObject();
+        delete labelsObject?.[objectKeys[0]]?.[objectKeys[1]]?.[objectKeys[2]];
+        if (removeFolders) {
+            this.uiMenus.forEach((menu) => menu.removeLabel(labelId));
+        }
+    }
+    /**
+     * Sets the visibility of a geometry in the scene.
+     * @param name Name of the geometry in the scene
+     * @param visible Value for the visibility of the object
+     */
+    geometryVisibility(name, visible) {
+        const sceneManager = this.three.getSceneManager();
+        sceneManager.objectVisibility(sceneManager.getObjectByName(name), visible);
+    }
+    /**
+     * Rotate the starting angle of clipping on detector geometry.
+     * @param angle Angle of rotation of the clipping.
+     */
+    rotateStartAngleClipping(angle) {
+        const openingAngle = this.stateManager.getOpeningClippingAngle();
+        this.three.setClippingAngle(angle, openingAngle);
+        this.stateManager.setStartClippingAngle(angle);
+    }
+    /**
+     * Rotate the opening angle of clipping on detector geometry.
+     * @param angle Angle of rotation of the clipping.
+     */
+    rotateOpeningAngleClipping(angle) {
+        const startingAngle = this.stateManager.getStartClippingAngle();
+        this.three.setClippingAngle(startingAngle, angle);
+        this.stateManager.setOpeningClippingAngle(angle);
+    }
+    /**
+     * Set if the detector geometry is to be clipped or not.
+     * @param value Set clipping to be true or false.
+     */
+    setClipping(value) {
+        this.three.setClipping(value);
+        this.stateManager.setClippingEnabled(value);
+    }
+    /**
+     * Detect the current theme and set it.
+     */
+    detectColorScheme() {
+        let dark = false; // default to light
+        // local storage is used to override OS theme settings
+        if (getFromLocalStorage('theme')) {
+            if (getFromLocalStorage('theme') === 'dark') {
+                dark = true;
+            }
+        }
+        else if (!window.matchMedia) {
+            // matchMedia method not supported
+        }
+        else if (matchMedia('(prefers-color-scheme: dark)').matches) {
+            // OS theme setting detected as dark
+            dark = true;
+        }
+        this.darkTheme = dark;
+        // dark theme preferred, set document with a `data-theme` attribute
+        this.setDarkTheme(dark);
+    }
+    /**
+     * Set if the theme is to be dark or light.
+     * @param dark If the theme is to be dark or light. True for dark and false for light theme.
+     */
+    setDarkTheme(dark) {
+        const theme = dark ? 'dark' : 'light';
+        setToLocalStorage('theme', theme);
+        document.documentElement.setAttribute('data-theme', theme);
+        this.three.setDarkColor(dark);
+    }
+    /**
+     * Get if the theme is dark or not.
+     * @returns If the theme is dark or not.
+     */
+    getDarkTheme() {
+        return this.darkTheme;
+    }
+    /**
+     * Set autorotate for the orbit controls.
+     * @param rotate If the autorotate is to be set or not.
+     */
+    setAutoRotate(rotate) {
+        this.three.autoRotate(rotate);
+    }
+    /**
+     * Set whether to show the axis or not
+     * @param show If the axis is to be shown or not.
+     */
+    setShowAxis(show) {
+        this.three.getSceneManager().setAxis(show);
+    }
+    /**
+     * Translate the cartesian grid
+     */
+    translateCartesianGrid(translate) {
+        this.three.getSceneManager().translateCartesianGrid(translate);
+    }
+    /**
+     * Translate the cartesian labels
+     */
+    translateCartesianLabels(translate) {
+        this.three.getSceneManager().translateCartesianLabels(translate);
+    }
+    /**
+     * Show labels on cartesian grid
+     * @param visible if the labels are to be shown or not
+     */
+    showLabels(visible) {
+        this.three.getSceneManager().showLabels(visible);
+    }
+    /**
+     * Set whether to show the cartesian or not
+     * @param show If the grid is to be shown or not.
+     * @param scale The maximum dimensions (height, width, length) of the grid
+     * @param config Configuration related to the visibility of the grid, such as visibility of the planes, number of planes in each direction, sparsity of the gridlines
+     */
+    setShowCartesianGrid(show, scale, config) {
+        if (typeof config === 'undefined') {
+            this.three.getSceneManager().setCartesianGrid(show, scale);
+        }
+        else {
+            this.three.getSceneManager().setCartesianGrid(show, scale, config);
+        }
+    }
+    /**
+     * Returns the cartesian grid configuration
+     */
+    getCartesianGridConfig() {
+        return this.three.getSceneManager().getCartesianGridConfig();
+    }
+    /**
+     * Set whether to show the eta/phi or not
+     * @param show If the grid is to be shown or not.
+     */
+    setShowEtaPhiGrid(show) {
+        this.three.getSceneManager().setEtaPhiGrid(show);
+    }
+    /**
+     * Show 3D coordinates where the mouse pointer clicks
+     * @param show If the coordinates are to be shown or not.
+     */
+    show3DMousePoints(show) {
+        this.three.show3DMousePoints(show);
+    }
+    /**
+     * Show 3D Distance between two clicked points
+     */
+    show3DDistance(show) {
+        this.three.show3DDistance(show);
+    }
+    /**
+     * Shift cartesian grid by a mouse click
+     */
+    shiftCartesianGridByPointer() {
+        this.three.shiftCartesianGrid();
+    }
+    /**
+     * Get preset views from the configuration.
+     * @returns Available preset views.
+     */
+    getPresetViews() {
+        if (!this.configuration || !this.configuration.presetViews) {
+            return [];
+        }
+        return this.configuration.presetViews;
+    }
+    /**
+     * Get preset animations from the configuration.
+     * @returns Available preset animations.
+     */
+    getPresetAnimations() {
+        if (this.configuration?.presetAnimations) {
+            return this.configuration?.presetAnimations;
+        }
+        else {
+            return defaultAnimationPresets;
+        }
+    }
+    /**
+     * Change camera view to a preset view.
+     * @param view Preset view to which the camera has to be transformed.
+     */
+    displayView(view) {
+        this.three.animateCameraTransform(view.cameraPos, view.cameraTarget, 1000);
+        if (view.clipping != ClippingSetting.NotForced) {
+            this.rotateStartAngleClipping(view.clippingStartAngle);
+            this.rotateOpeningAngleClipping(view.clippingOpeningAngle);
+            this.setClipping(view.clipping == ClippingSetting.On);
+        }
+    }
+    /**
+     * Toggle orthographic/perspective view.
+     * @param orthographic If the camera is to be orthographic or perspective.
+     */
+    toggleOrthographicView(orthographic) {
+        this.three.swapCameras(orthographic);
+    }
+    /**
+     * Set the renderer for the secondary overlay canvas.
+     * @param overlayCanvas Canvas for which the overlay renderer is to be set.
+     */
+    setOverlayRenderer(overlayCanvas) {
+        this.three.setOverlayRenderer(overlayCanvas);
+    }
+    /**
+     * Enable keyboard controls for some UI manager operations.
+     */
+    enableKeyboardControls() {
+        document.addEventListener('keydown', (e) => {
+            const isTyping = ['input', 'textarea'].includes(e.target?.tagName.toLowerCase());
+            if (!isTyping && e.shiftKey) {
+                switch (e.code) {
+                    case 'KeyT': // shift + "t"
+                        this.setDarkTheme(!this.getDarkTheme());
+                        break;
+                }
+                // Shortcut keys for preset views (shift + 1...9)
+                if (this.configuration?.presetViews) {
+                    if (e.code.startsWith('Digit')) {
+                        const index = parseInt(e.code.slice(-1)) - 1;
+                        if (this.configuration.presetViews?.[index]) {
+                            this.displayView(this.configuration.presetViews[index]);
+                        }
+                    }
+                }
+            }
+        });
+    }
+    /**
+     * Load labels from a file.
+     */
+    loadLabelsFile() {
+        const eventDataLoader = this.configuration?.eventDataLoader;
+        const labelsObject = eventDataLoader?.getLabelsObject();
+        if (eventDataLoader && labelsObject) {
+            loadFile((data) => {
+                console.log('UIManager: loading Labels');
+                const labelsObject = JSON.parse(data);
+                // This contains the names of the labels, but not their colours.
+                for (const eventDataType of Object.keys(labelsObject)) {
+                    for (const collection of Object.keys(labelsObject[eventDataType])) {
+                        const collectionObject = eventDataLoader.getCollection(collection);
+                        if (!collectionObject) {
+                            console.log('WARNING - cannot find ', collection, ' in eventDataLoader. Skipping.');
+                            continue;
+                        }
+                        for (const labelIndex of Object.keys(labelsObject[eventDataType][collection])) {
+                            const label = labelsObject[eventDataType][collection][labelIndex];
+                            const objectUuid = collectionObject[labelIndex].uuid;
+                            const labelId = eventDataLoader.addLabelToEventObject(label, collection, Number(labelIndex));
+                            this.addLabel(labelId);
+                            this.three.addLabelToObject(label, objectUuid, labelId);
+                        }
+                    }
+                }
+            });
+        }
+    }
+    /**
+     * Load previous state of the event data folder in Phoenix menu if any.
+     */
+    loadEventFolderPhoenixMenuState() {
+        const phoenixMenuUI = this.uiMenus.find((uiMenu) => uiMenu instanceof PhoenixMenuUI);
+        phoenixMenuUI?.loadEventFolderState();
+    }
+    /**
+     * Get all the UI menus.
+     * @returns An array containing UI menus. (Phoenix menu, dat.GUI menu etc.)
+     */
+    getUIMenus() {
+        return this.uiMenus;
+    }
+}
+//# sourceMappingURL=index.js.map
