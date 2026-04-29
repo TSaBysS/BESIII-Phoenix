@@ -137,15 +137,21 @@ async function updateEmcDebugPanel(eventDisplay) {
     const endcapZCut = zMax * 0.55;
 
     let endcapCandidateMeshes = 0;
+    let endcapPlusZMeshes = 0;
+    let endcapMinusZMeshes = 0;
     let barrelCandidateMeshes = 0;
     const tmpBox = new THREE.Box3();
     const c = new THREE.Vector3();
+    const endcapMeshCenterByMesh = new Map();
     emcMeshes.forEach((mesh) => {
       tmpBox.setFromObject(mesh);
       if (tmpBox.isEmpty()) return;
       tmpBox.getCenter(c);
       if (Math.abs(c.z) >= endcapZCut) {
         endcapCandidateMeshes += 1;
+        if (c.z >= 0) endcapPlusZMeshes += 1;
+        else endcapMinusZMeshes += 1;
+        endcapMeshCenterByMesh.set(mesh, c.clone());
         endcapMeshes.push(mesh);
       }
       else barrelCandidateMeshes += 1;
@@ -157,7 +163,9 @@ async function updateEmcDebugPanel(eventDisplay) {
       for (const mesh of endcapMeshes) {
         const box = new THREE.Box3().setFromObject(mesh);
         if (box.isEmpty()) continue;
-        const helper = new THREE.Box3Helper(box, 0xff4444);
+        const center = endcapMeshCenterByMesh.get(mesh);
+        const color = center && center.z < 0 ? 0x44ff44 : 0xff4444; // +z red, -z green
+        const helper = new THREE.Box3Helper(box, color);
         helper.renderOrder = 999;
         helper.userData.__bes3EmcDebug = true;
         scene?.add?.(helper);
@@ -172,8 +180,10 @@ async function updateEmcDebugPanel(eventDisplay) {
       `BBox z-range: [${emcBox.min.z.toFixed(1)}, ${emcBox.max.z.toFixed(1)}], zMax=${zMax.toFixed(1)}`,
       `Heuristic cut |z| >= ${endcapZCut.toFixed(1)}`,
       `Endcap candidate meshes: ${endcapCandidateMeshes}`,
+      `Endcap +z meshes: ${endcapPlusZMeshes}`,
+      `Endcap -z meshes: ${endcapMinusZMeshes}`,
       `Barrel candidate meshes: ${barrelCandidateMeshes}`,
-      `Candidate boxes: ${showEmcCandidateBoxes ? "ON (red)" : "OFF"} (?emcboxes=0 to disable)`,
+      `Candidate boxes: ${showEmcCandidateBoxes ? "ON (+z red / -z green)" : "OFF"} (?emcboxes=0 to disable)`,
       `Name matches (endcap/east/west/cap): ${emcNameMatches.size}`,
       emcNameMatches.size
         ? `Samples: ${Array.from(emcNameMatches).slice(0, 8).join(", ")}`
