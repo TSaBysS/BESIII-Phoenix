@@ -9,6 +9,7 @@
 5. [动画时间轴的时间来源](#5-动画时间轴的时间来源)
 6. [Rec Track 是如何画的](#6-rec-track-是如何画的)
 7. [坐标约定](#7-坐标约定)
+8. [PID 具体做法（补充）](#8-pid-具体做法补充)
 
 ---
 
@@ -258,6 +259,56 @@ helix = [dr, φ₀, κ, dz, tanλ]
 > - 探测器几何加载后，场景中各体积的坐标单位是 GDML 的原生 mm，但 Phoenix 内部可能存在进一步缩放；
 > - 事件数据在传入 Three.js 前乘以 0.1，使得 1 mm（数据）= 0.1 场景单位，近似对齐几何场景坐标；
 > - MDC 击中和 EMC 晶体的位置由解码的 wire/cell ID 加几何参数计算，使用与 Python 脚本中完全相同的 mm 坐标后同样乘以 `EVENT_GLOBAL_R_SCALE`。
+
+---
+
+## 8. PID 具体做法（补充）
+
+PID 功能由 `web/pid-tools.js`（算法与格式化）和 `web/pid-interaction.js`（交互）共同完成，入口在 `web/app.js` 中初始化。
+
+### 8.1 参与 PID 的数据来源
+
+- **主输入**：`TRecEvent/m_recMdcDedxCol` 转换后的 dE/dx 结果（`m_pid_prob[5]`、`chiE/chiMu/chiPi/chiK/chiP`）
+- **轨迹关联**：通过 `TEvtRecObject/m_evtRecTrackCol` 建立 `mdcTrackId ↔ kalTrackId ↔ dedx` 关联
+- **显示对象**：只对前端可拾取的重建 track（红色 stable track）提供 PID 面板
+
+### 8.2 前端选中流程（点击红色重建轨迹）
+
+1. `event-renderer.js` 在构建轨迹时将每条 track 写入 `trackCandidateCache`，并保存 `trackId/mode/pointCount` 等元数据。  
+2. `pid-interaction.js` 使用 Three.js raycasting 对 `trackCandidateCache` 做命中测试。  
+3. 命中后将轨迹标记为 `selectedTrackId`，同时刷新高亮样式（线宽/颜色/透明度变化），并调用 PID 面板渲染。  
+4. 未命中或退出 PID 模式时，清空选中态并隐藏 hover/panel。
+
+### 8.3 PID 概率计算与展示
+
+`pid-tools.js` 的核心逻辑：
+
+- `extractPidPayloadFromTrack(track)`：从轨迹对象提取 PID 原始字段（prob、chi、quality）
+- `probMapFromPid(pidPayload)`：构造 `{e, mu, pi, k, p}` 概率字典
+- `sumProbMap(probMap)`：做概率和检查（用于质量判断）
+- `selectPidForTrack(track)`：给出“最佳粒子假设”（最大概率项）
+- `buildPidDisplay(...)`：生成面板展示文本（包含概率、chi、最佳假设）
+
+展示策略：
+
+- 面板优先显示 `m_pid_prob[5]`（e/μ/π/K/p）
+- 若概率缺失，则显示 chi 信息和“PID unavailable”
+- 数值统一做格式化（`formatPidValue`），避免科学计数法影响可读性
+
+### 8.4 MC 文件下的 truth match 显示
+
+当事件包含 MC truth 轨迹时，PID 面板额外显示“truth match”：
+
+- 调用 `truth.js::computeClosestTruthMatch(recTrack, truthTracks)` 做几何最近匹配
+- 匹配分数使用 `meanDist + 0.2*dStart + 1.5*angleDeg`（见第 4 节）
+- 显示内容：`pdg`、估算动量、匹配分数
+- 该匹配仅用于显示解释，不会反向修改 reco track 或 PID 概率
+
+### 8.5 当前约束与注意事项
+
+- 当前 PID 面板面向 **重建轨迹**；MC truth 轨迹本身不做 PID 拟合
+- PID 依赖输入 REC 中的 dE/dx 与关联关系，若上游未写入则前端只能显示几何/运动学信息
+- 同一 `trackId` 在 stable/helix5 模式下可能对应不同采样点集，PID 信息以轨迹关联字段为准，不随绘制采样变化
 
 ---
 

@@ -33,14 +33,33 @@ export const assembledComponents = [
 
 const geometryMap = () => window.BES3_GEOMETRIES || { full: "../data/bes3.root.json" };
 
-export function getGeometryEntries() {
-  return assembledComponents
-    .map((c) => ({ key: c.key, path: geometryMap()[c.key] }))
-    .filter((e) => Boolean(e.path));
+function getSelectedView() {
+  return window.BES3_SELECTED_VIEW || window.BES3_DEFAULT_VIEW || "assembled_besiii";
 }
 
-export function getGeometryList() {
-  return getGeometryEntries().map((e) => e.path);
+export function getGeometryEntries(view = getSelectedView()) {
+  const gm = geometryMap();
+
+  // Preferred assembled mode: load one global full geometry to keep detector
+  // relative placements (especially endcaps) consistent with old behavior.
+  if (view === "assembled_besiii") {
+    const assembledPath = gm.assembled_besiii;
+    if (assembledPath && assembledPath !== "__assembled__") {
+      return [{ key: "full", path: assembledPath }];
+    }
+    // Legacy fallback: assembled by loading sub-detectors individually.
+    return assembledComponents
+      .map((c) => ({ key: c.key, path: gm[c.key] }))
+      .filter((e) => Boolean(e.path));
+  }
+
+  // Single-detector view.
+  if (gm[view]) return [{ key: view, path: gm[view] }];
+  return [];
+}
+
+export function getGeometryList(view = getSelectedView()) {
+  return getGeometryEntries(view).map((e) => e.path);
 }
 
 export let phoenixCtor = null;
