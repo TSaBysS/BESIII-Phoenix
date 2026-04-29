@@ -90,6 +90,16 @@ function getPidSelectableObjects() {
   return getTrackCandidateObjects().filter((obj) => obj?.userData?.mode !== "mc");
 }
 
+function getShowerCandidateObjects() {
+  const out = [];
+  _currentOverlayGroupRef?.()?.traverse?.((obj) => {
+    if (!obj) return;
+    if (obj?.userData?.kind !== "emc_shower") return;
+    if (obj?.isMesh) out.push(obj);
+  });
+  return out;
+}
+
 export function getTrackInfoById(trackId) {
   if (trackId === null || trackId === undefined) return null;
   const tid = Number(trackId);
@@ -111,6 +121,35 @@ export function getTrackInfoById(trackId) {
     if (src) return { ...(found || {}), ...src, trackId: tid };
   }
   return found;
+}
+
+function renderShowerInfoPanel(showerInfo) {
+  if (!_trackInfoPanelEl) return;
+  if (!showerInfo) {
+    _trackInfoPanelEl.classList.remove("open");
+    _trackInfoPanelEl.innerHTML = "";
+    return;
+  }
+  const recoE = Number(showerInfo?.recoEnergyGeV);
+  const recoP = Number(showerInfo?.recoMomentumGeV);
+  const truthE = Number(showerInfo?.truthEnergyGeV);
+  const truthP = Number(showerInfo?.truthMomentumGeV);
+  const pdg = Number.isFinite(Number(showerInfo?.truthPdg))
+    ? Number(showerInfo.truthPdg)
+    : (Number.isFinite(Number(showerInfo?.pdg)) ? Number(showerInfo.pdg) : 22);
+  const motherPdg = Number.isFinite(Number(showerInfo?.truthMotherPdg))
+    ? Number(showerInfo.truthMotherPdg)
+    : null;
+  const rows = [
+    `<div class="kv"><strong>Shower PDG:</strong> ${pdg}</div>`,
+    `<div class="kv"><strong>Mother PDG:</strong> ${motherPdg ?? "N/A"}</div>`,
+    `<div class="kv"><strong>Reco Energy:</strong> ${Number.isFinite(recoE) ? recoE.toFixed(3) : "N/A"} GeV</div>`,
+    `<div class="kv"><strong>Reco Momentum:</strong> ${Number.isFinite(recoP) ? recoP.toFixed(3) : "N/A"} GeV/c</div>`,
+    `<div class="kv"><strong>Truth Energy:</strong> ${Number.isFinite(truthE) ? truthE.toFixed(3) : "N/A"} GeV</div>`,
+    `<div class="kv"><strong>Truth Momentum:</strong> ${Number.isFinite(truthP) ? truthP.toFixed(3) : "N/A"} GeV/c</div>`,
+  ];
+  _trackInfoPanelEl.innerHTML = `<h4>Shower Detail (MC)</h4>${rows.join("")}`;
+  _trackInfoPanelEl.classList.add("open");
 }
 
 // ── hover / selection visuals ─────────────────────────────────────────────────
@@ -194,6 +233,11 @@ export function renderTrackInfoPanel(trackInfo) {
       const pTruth   = estimateTruthMomentumMagnitude(truthObj);
       rows.push(
         `<div class="kv"><strong>Truth Match:</strong> pdg=${truth.pdg}, p=${Number.isFinite(pTruth) ? pTruth.toFixed(3) : "N/A"} GeV/c</div>`,
+      );
+      rows.push(
+        `<div class="kv"><strong>Truth Mother PDG:</strong> ${
+          Number.isFinite(Number(truth?.motherPdg)) ? Number(truth.motherPdg) : "N/A"
+        }</div>`,
       );
     }
   }
@@ -294,6 +338,20 @@ export async function bindTrackInteractionsIfNeeded() {
     return pickTrackByScreenProximity(evt);
   };
 
+  const pickShower = async (evt) => {
+    if (!interactionState.pidMode || !_interactionCanvas) return null;
+    const rect = _interactionCanvas?.getBoundingClientRect?.() || _viewerEl.getBoundingClientRect();
+    raycaster.mouse.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+    raycaster.mouse.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+    const camera = getMainCamera();
+    camera?.updateMatrixWorld?.(true);
+    if (!camera) return null;
+    raycaster.instance.setFromCamera(raycaster.mouse, camera);
+    const hits = raycaster.instance.intersectObjects(getShowerCandidateObjects(), false);
+    if (!hits.length) return null;
+    return hits[0]?.object?.userData || null;
+  };
+
   const onMove = async (evt) => {
     if (!interactionState.pidMode) {
       interactionState.hoveredTrackId = null;
@@ -307,7 +365,9 @@ export async function bindTrackInteractionsIfNeeded() {
       const info = getTrackInfoById(tid);
       showTrackHoverTip(evt.clientX, evt.clientY, info?.mode === "mc" ? `Truth track ${tid}` : `Track ${tid} (click for PID)`);
     } else {
-      hideTrackHoverTip();
+      const shower = await pickShower(evt);
+      if (shower) showTrackHoverTip(evt.clientX, evt.clientY, "Shower (click for MC truth)");
+      else hideTrackHoverTip();
     }
     updateInteractionCursor();
     refreshTrackSelectionVisuals();
@@ -323,11 +383,18 @@ export async function bindTrackInteractionsIfNeeded() {
   const onClick = async (evt) => {
     if (!interactionState.pidMode) return;
     const tid = await pickTrack(evt);
-    if (tid === null || tid === undefined || !Number.isFinite(Number(tid))) return;
-    const info = getTrackInfoById(tid);
-    if (!info || info?.mode === "mc") return;
-    interactionState.selectedTrackId = tid;
-    renderTrackInfoPanel(info);
+    if (tid !== null && tid !== undefined && Number.isFinite(Number(tid))) {
+      const info = getTrackInfoById(tid);
+      if (!info || info?.mode === "mc") return;
+      interactionState.selectedTrackId = tid;
+      renderTrackInfoPanel(info);
+    } else {
+      const shower = await pickShower(evt);
+      if (!shower) return;
+      if (!Number.isFinite(Number(shower?.truthEnergyGeV)) && !Number.isFinite(Number(shower?.truthMomentumGeV))) return;
+      interactionState.selectedTrackId = null;
+      renderShowerInfoPanel(shower);
+    }
     if (_trackInfoPanelEl) {
       _trackInfoPanelEl.classList.add("flash");
       setTimeout(() => _trackInfoPanelEl.classList.remove("flash"), 160);

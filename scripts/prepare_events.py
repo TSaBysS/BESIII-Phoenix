@@ -29,6 +29,7 @@ PID_HYP_MASS = {
     "proton": 0.938272,
 }
 MC_TRUTH_CHARGED_PID = {11, 13, 211, 321, 2212}
+MC_TRUTH_PHOTON_PID = {22}
 PDG_CHARGE = {
     11: -1,
     -11: 1,
@@ -98,6 +99,13 @@ def _mc_member(mp, keys, default=None):
     return default
 
 
+def _unit_vec(x, y, z):
+    n = math.sqrt(x * x + y * y + z * z)
+    if n <= 1e-12:
+        return [0.0, 0.0, 1.0]
+    return [x / n, y / n, z / n]
+
+
 def _build_mc_truth_polyline(mp, mdc_rmax_mm=810.0, mdc_zmax_mm=1450.0):
     pdg = int(_as_float(_mc_member(mp, ["m_particleID", "m_particleProperty", "m_pdgCode"], 0), 0))
     if abs(pdg) not in MC_TRUTH_CHARGED_PID:
@@ -161,9 +169,54 @@ def _build_mc_truth_polyline(mp, mdc_rmax_mm=810.0, mdc_zmax_mm=1450.0):
         "pdg": pdg,
         "p": p_mag,
         "mother": int(_as_float(_mc_member(mp, ["m_mother"], -1), -1)),
+        "motherPdg": None,
         "pos": points,
         "mode": "mc",
         "color": "0x90caf9",
+    }
+
+
+def _build_mc_truth_photon_cluster(mp, emc_r_mm=920.0):
+    pdg = int(_as_float(_mc_member(mp, ["m_particleID", "m_particleProperty", "m_pdgCode"], 0), 0))
+    if abs(pdg) not in MC_TRUTH_PHOTON_PID:
+        return None
+    px = _as_float(_mc_member(mp, ["m_xInitialMomentum", "m_px"], 0.0), 0.0)
+    py = _as_float(_mc_member(mp, ["m_yInitialMomentum", "m_py"], 0.0), 0.0)
+    pz = _as_float(_mc_member(mp, ["m_zInitialMomentum", "m_pz"], 0.0), 0.0)
+    p_mag = math.sqrt(px * px + py * py + pz * pz)
+    if p_mag <= 1e-9:
+        return None
+    x0 = _as_float(_mc_member(mp, ["m_xInitialPosition", "m_initialPositionX"], 0.0), 0.0) * LENGTH_SCALE
+    y0 = _as_float(_mc_member(mp, ["m_yInitialPosition", "m_initialPositionY"], 0.0), 0.0) * LENGTH_SCALE
+    z0 = _as_float(_mc_member(mp, ["m_zInitialPosition", "m_initialPositionZ"], 0.0), 0.0) * LENGTH_SCALE
+    xf = _as_float(_mc_member(mp, ["m_xFinalPosition", "m_finalPositionX"], x0 / LENGTH_SCALE), x0 / LENGTH_SCALE) * LENGTH_SCALE
+    yf = _as_float(_mc_member(mp, ["m_yFinalPosition", "m_finalPositionY"], y0 / LENGTH_SCALE), y0 / LENGTH_SCALE) * LENGTH_SCALE
+    zf = _as_float(_mc_member(mp, ["m_zFinalPosition", "m_finalPositionZ"], z0 / LENGTH_SCALE), z0 / LENGTH_SCALE) * LENGTH_SCALE
+    rf = math.sqrt(xf * xf + yf * yf + zf * zf)
+    if rf < 10.0:
+        uv = _unit_vec(px, py, pz)
+        xf = x0 + uv[0] * emc_r_mm
+        yf = y0 + uv[1] * emc_r_mm
+        zf = z0 + uv[2] * emc_r_mm
+        rf = math.sqrt(xf * xf + yf * yf + zf * zf)
+    uv = _unit_vec(xf - x0, yf - y0, zf - z0)
+    return {
+        "trackId": int(_as_float(_mc_member(mp, ["m_trackIndex"], -1), -1)),
+        "pdg": pdg,
+        "mother": int(_as_float(_mc_member(mp, ["m_mother"], -1), -1)),
+        "motherPdg": None,
+        "truthEnergyGeV": p_mag,
+        "truthMomentumGeV": p_mag,
+        "truthMomentumVec": [px, py, pz],
+        "radius": rf if rf > 0 else emc_r_mm,
+        "pos": [xf, yf, zf],
+        "theta": math.acos(max(-1.0, min(1.0, uv[2]))),
+        "phi": math.atan2(uv[1], uv[0]),
+        "side": 22.0,
+        "energy": p_mag * 1000.0,
+        "color": 0x4a90e2,
+        "opacity": 0.86,
+        "mode": "mc_truth_photon",
     }
 
 
@@ -1174,11 +1227,19 @@ def convert_rec_to_event(rec_path, entry_idx=0):
         clusters.append(
             {
                 "trackId": int(_safe_get(sh, "m_trackId", -1)),
+                "pdg": 22,
                 "energy": float(_safe_get(sh, "m_energy", 0.0)) * 1000.0,  # GeV-scale for visibility
+                "recoEnergyGeV": float(_safe_get(sh, "m_energy", 0.0)),
+                "recoMomentumGeV": float(_safe_get(sh, "m_energy", 0.0)),
                 "theta": theta,
                 "phi": phi,
                 "radius": r if r > 0 else 900.0,
                 "pos": [x, y, z],
+                "recoMomentumVec": [
+                    float(_safe_get(sh, "m_energy", 0.0)) * math.sin(theta) * math.cos(phi),
+                    float(_safe_get(sh, "m_energy", 0.0)) * math.sin(theta) * math.sin(phi),
+                    float(_safe_get(sh, "m_energy", 0.0)) * math.cos(theta),
+                ],
                 "side": 22.0,
                 "color": 0xffa726,
                 "opacity": 0.8,
@@ -1346,20 +1407,64 @@ def convert_rec_to_event(rec_path, entry_idx=0):
             )
 
     mc_tracks = []
+    mc_truth_photons = []
+    mc_meta_by_tid = {}
     for mc_branch in ("TMcEvent/m_mcParticleCol", "TMcEvent/m_mcParticleCol#"):
         try:
             mc_col = _entry_array(tree, mc_branch, entry_idx)
             for mp in mc_col:
+                tid = int(_as_float(_mc_member(mp, ["m_trackIndex"], -1), -1))
+                pdg = int(_as_float(_mc_member(mp, ["m_particleID", "m_particleProperty", "m_pdgCode"], 0), 0))
+                mother = int(_as_float(_mc_member(mp, ["m_mother"], -1), -1))
+                if tid >= 0:
+                    mc_meta_by_tid[tid] = {"pdg": pdg, "mother": mother}
                 track = _build_mc_truth_polyline(mp)
                 if track is None:
-                    continue
-                # Skip beam electrons from generator entrance.
-                if abs(track["pdg"]) == 11 and track["mother"] < 0:
-                    continue
-                mc_tracks.append(track)
+                    ph = _build_mc_truth_photon_cluster(mp)
+                    if ph is not None:
+                        mc_truth_photons.append(ph)
+                else:
+                    # Skip beam electrons from generator entrance.
+                    if abs(track["pdg"]) == 11 and track["mother"] < 0:
+                        continue
+                    mc_tracks.append(track)
             break
         except Exception:
             continue
+
+    for trk in mc_tracks:
+        mother_idx = int(trk.get("mother", -1))
+        trk["motherPdg"] = mc_meta_by_tid.get(mother_idx, {}).get("pdg")
+    for ph in mc_truth_photons:
+        mother_idx = int(ph.get("mother", -1))
+        ph["motherPdg"] = mc_meta_by_tid.get(mother_idx, {}).get("pdg")
+
+    if mc_truth_photons and clusters:
+        for cl in clusters:
+            cx, cy, cz = cl.get("pos", [0.0, 0.0, 0.0])
+            cu = _unit_vec(float(cx), float(cy), float(cz))
+            e_reco = float(cl.get("recoEnergyGeV", 0.0))
+            best = None
+            for ph in mc_truth_photons:
+                tv = ph.get("truthMomentumVec", [0.0, 0.0, 0.0])
+                tu = _unit_vec(float(tv[0]), float(tv[1]), float(tv[2]))
+                dot = max(-1.0, min(1.0, cu[0] * tu[0] + cu[1] * tu[1] + cu[2] * tu[2]))
+                angle = math.acos(dot)
+                e_truth = float(ph.get("truthEnergyGeV", 0.0))
+                e_term = abs(e_reco - e_truth) / max(e_truth, 1e-6)
+                score = angle + 0.08 * e_term
+                if best is None or score < best["score"]:
+                    best = {"score": score, "angle": angle, "ph": ph}
+            if best is not None and best["angle"] < 0.35:
+                ph = best["ph"]
+                cl["truthTrackId"] = int(ph.get("trackId", -1))
+                cl["truthPdg"] = int(ph.get("pdg", 22))
+                cl["pdg"] = int(ph.get("pdg", 22))
+                cl["truthMother"] = int(ph.get("mother", -1))
+                cl["truthMotherPdg"] = ph.get("motherPdg")
+                cl["truthEnergyGeV"] = float(ph.get("truthEnergyGeV", 0.0))
+                cl["truthMomentumGeV"] = float(ph.get("truthMomentumGeV", 0.0))
+                cl["truthMomentumVec"] = list(ph.get("truthMomentumVec", [0.0, 0.0, 0.0]))
 
     rec_name = os.path.basename(rec_path)
     key = f"REC-{run_number}-{event_number}-{rec_name}"
@@ -1373,7 +1478,7 @@ def convert_rec_to_event(rec_path, entry_idx=0):
                 "REC MdcTrack (stable)": tracks_stable,
                 "MC Truth": mc_tracks,
             },
-            "CaloClusters": {"REC EmcShower": clusters},
+            "CaloClusters": {"REC EmcShower": clusters, "MC Truth Photon": mc_truth_photons},
             "Hits": {
                 "REC MdcHit": mdc_hits,
                 "REC EmcHit": emc_hits,

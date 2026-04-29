@@ -80,7 +80,10 @@ export async function buildCustomEventOverlay(
   if (showMcTruth) tracks.push(...trackMc);
   if (tracks.length === 0 && ev?.Tracks) tracks = Object.values(ev.Tracks).flat();
 
-  const clusters   = ev?.CaloClusters ? Object.values(ev.CaloClusters).flat() : [];
+  const recShowers = Array.isArray(ev?.CaloClusters?.["REC EmcShower"]) ? ev.CaloClusters["REC EmcShower"] : [];
+  const truthPhotons = (showMcTruth && Array.isArray(ev?.CaloClusters?.["MC Truth Photon"]))
+    ? ev.CaloClusters["MC Truth Photon"] : [];
+  const clusters = [...recShowers, ...truthPhotons];
 
   const tm    = eventDisplay?.getThreeManager?.();
   const sm    = tm?.getSceneManager?.();
@@ -164,10 +167,12 @@ export async function buildCustomEventOverlay(
 
     // Energy → colour and size: yellow (low) → orange → red (high).
     const tcol = Math.max(0, Math.min(1, e / 1000.0));
+    const isTruthPhoton = String(c?.mode || "").includes("mc_truth_photon");
     let colorHex = 0xffee58;
     if (tcol > 0.35) colorHex = 0xffc107;
     if (tcol > 0.60) colorHex = 0xff7043;
     if (tcol > 0.85) colorHex = 0xff1744;
+    if (isTruthPhoton) colorHex = Number(c?.color ?? 0x4a90e2);
 
     // Layered radial glow: 3 concentric translucent spheres, innermost brightest.
     const baseR   = 3.5 + 22.0 * Math.pow(tcol, 0.6);
@@ -175,7 +180,8 @@ export async function buildCustomEventOverlay(
     for (let li = 0; li < nLayers; li += 1) {
       const layerFrac = (li + 1) / nLayers;          // 1/3, 2/3, 1
       const r_i  = baseR * layerFrac;
-      const opac = (0.82 - 0.24 * li) * (0.18 + 0.82 * tcol);  // inner brightest
+      const opacBase = isTruthPhoton ? 0.55 : 0.82;
+      const opac = (opacBase - 0.18 * li) * (0.20 + 0.80 * tcol);  // inner brightest
       const geo  = new THREE.SphereGeometry(r_i, 12, 10);
       const mat  = new THREE.MeshBasicMaterial({
         color: new THREE.Color(colorHex), transparent: true, opacity: opac,

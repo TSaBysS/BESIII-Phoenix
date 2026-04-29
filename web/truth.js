@@ -75,7 +75,13 @@ export function computeClosestTruthMatch(trackInfo, ev) {
 
     const score = meanDistMm + 0.2 * dStart + 1.5 * angleDeg;
     if (!best || score < best.score) {
-      best = { score, trackId: Number(cand?.trackId), pdg: Number(cand?.pdg ?? 0), p: Number(cand?.p ?? NaN) };
+      best = {
+        score,
+        trackId: Number(cand?.trackId),
+        pdg: Number(cand?.pdg ?? 0),
+        motherPdg: Number(cand?.motherPdg ?? NaN),
+        p: Number(cand?.p ?? NaN),
+      };
     }
   }
   return best;
