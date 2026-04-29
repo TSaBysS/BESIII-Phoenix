@@ -56,7 +56,6 @@ const eventImportStatusEl = document.getElementById("eventImportStatus");
 const btnImportEventEl    = document.getElementById("btnImportEvent");
 const btnClearEventEl     = document.getElementById("btnClearEvent");
 const dropOverlayEl       = document.getElementById("dropOverlay");
-const debugPanelTextEl    = document.getElementById("debugPanelText");
 
 // ── runtime state ─────────────────────────────────────────────────────────────
 
@@ -64,44 +63,23 @@ const urlParams = new URLSearchParams(window.location.search);
 const selectedEventKeyFromQuery = urlParams.get("evt") || "";
 const showMcFromQuery         = urlParams.get("mc") === "1";
 const showTruthFromQuery      = urlParams.get("truth") === "1" || showMcFromQuery;
-const showEmcCandidateBoxes   = urlParams.get("emcboxes") !== "0";
 
 let currentEventDisplay  = null;
 let cachedEventsData     = null;
 let currentOverlayGroup  = null;
 let loaderProgressValue  = 10;
 let importInProgress     = false;
-let emcDebugHelpers      = [];
 
 // ── loader progress ───────────────────────────────────────────────────────────
 
-function setDebugPanelText(text) {
-  if (!debugPanelTextEl) return;
-  debugPanelTextEl.textContent = String(text || "");
-}
-
-function clearEmcDebugHelpers() {
-  if (!emcDebugHelpers.length) return;
-  emcDebugHelpers.forEach((obj) => {
-    obj?.parent?.remove?.(obj);
-    if (obj?.geometry?.dispose) obj.geometry.dispose();
-    const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
-    mats.forEach((m) => m?.dispose?.());
-  });
-  emcDebugHelpers = [];
-}
-
-async function updateEmcDebugPanel(eventDisplay) {
-  if (!eventDisplay) { setDebugPanelText("No eventDisplay instance."); return; }
+async function recolorEmcEndcaps(eventDisplay) {
+  if (!eventDisplay) return;
   try {
     const THREE = await import("three");
     const tm = eventDisplay?.getThreeManager?.();
     const sm = tm?.getSceneManager?.();
     const geometries = sm?.getGeometries?.() || sm?.getScene?.();
-    if (!geometries) {
-      setDebugPanelText("No geometry scene from Phoenix.");
-      return;
-    }
+    if (!geometries) return;
 
     const emcRoots = [];
     const emcExact = geometries.getObjectByName?.("emc");
@@ -112,21 +90,15 @@ async function updateEmcDebugPanel(eventDisplay) {
       if (!emcRoots.includes(obj)) emcRoots.push(obj);
     });
 
-    if (!emcRoots.length) {
-      setDebugPanelText("EMC root not found in geometry tree.");
-      return;
-    }
-
-    const endcapNameRegex = /(endcap|ecap|east|west|cap)/i;
-    const emcNameMatches = new Set();
+    if (!emcRoots.length) return;
     const emcMeshes = [];
     const endcapMeshes = [];
     emcRoots.forEach((root) => {
       root.traverse((obj) => {
         if (obj?.isMesh) emcMeshes.push(obj);
-        if (obj?.name && endcapNameRegex.test(String(obj.name))) emcNameMatches.add(String(obj.name));
       });
     });
+    if (!emcMeshes.length) return;
 
     const emcBox = new THREE.Box3();
     emcRoots.forEach((root) => {
@@ -136,65 +108,33 @@ async function updateEmcDebugPanel(eventDisplay) {
     const zMax = Math.max(Math.abs(emcBox.min.z), Math.abs(emcBox.max.z));
     const endcapZCut = zMax * 0.55;
 
-    let endcapCandidateMeshes = 0;
-    let endcapPlusZMeshes = 0;
-    let endcapMinusZMeshes = 0;
-    let barrelCandidateMeshes = 0;
     const tmpBox = new THREE.Box3();
     const c = new THREE.Vector3();
-    const endcapMeshCenterByMesh = new Map();
     emcMeshes.forEach((mesh) => {
       tmpBox.setFromObject(mesh);
       if (tmpBox.isEmpty()) return;
       tmpBox.getCenter(c);
       if (Math.abs(c.z) >= endcapZCut) {
-        endcapCandidateMeshes += 1;
-        if (c.z >= 0) endcapPlusZMeshes += 1;
-        else endcapMinusZMeshes += 1;
-        endcapMeshCenterByMesh.set(mesh, c.clone());
         endcapMeshes.push(mesh);
       }
-      else barrelCandidateMeshes += 1;
     });
+    if (!endcapMeshes.length) return;
 
-    clearEmcDebugHelpers();
-    if (showEmcCandidateBoxes) {
-      const scene = sm?.getScene?.() || geometries;
-      for (const mesh of endcapMeshes) {
-        const box = new THREE.Box3().setFromObject(mesh);
-        if (box.isEmpty()) continue;
-        const center = endcapMeshCenterByMesh.get(mesh);
-        const color = center && center.z < 0 ? 0x44ff44 : 0xff4444; // +z red, -z green
-        const helper = new THREE.Box3Helper(box, color);
-        helper.renderOrder = 999;
-        helper.userData.__bes3EmcDebug = true;
-        scene?.add?.(helper);
-        emcDebugHelpers.push(helper);
-      }
+    for (const mesh of endcapMeshes) {
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      mats.forEach((mat) => {
+        if (!mat) return;
+        // Make only endcaps obviously visible for quick checks.
+        if (mat.color?.setHex) mat.color.setHex(0xff00ff);
+        if (mat.emissive?.setHex) mat.emissive.setHex(0x330033);
+        mat.transparent = false;
+        mat.opacity = 1.0;
+        mat.depthWrite = true;
+        mat.needsUpdate = true;
+      });
     }
-
-    const lines = [
-      `EMC debug @ ${new Date().toLocaleTimeString()}`,
-      `EMC roots: ${emcRoots.length}`,
-      `EMC meshes: ${emcMeshes.length}`,
-      `BBox z-range: [${emcBox.min.z.toFixed(1)}, ${emcBox.max.z.toFixed(1)}], zMax=${zMax.toFixed(1)}`,
-      `Heuristic cut |z| >= ${endcapZCut.toFixed(1)}`,
-      `Endcap candidate meshes: ${endcapCandidateMeshes}`,
-      `Endcap +z meshes: ${endcapPlusZMeshes}`,
-      `Endcap -z meshes: ${endcapMinusZMeshes}`,
-      `Barrel candidate meshes: ${barrelCandidateMeshes}`,
-      `Candidate boxes: ${showEmcCandidateBoxes ? "ON (+z red / -z green)" : "OFF"} (?emcboxes=0 to disable)`,
-      `Name matches (endcap/east/west/cap): ${emcNameMatches.size}`,
-      emcNameMatches.size
-        ? `Samples: ${Array.from(emcNameMatches).slice(0, 8).join(", ")}`
-        : "Samples: (none)",
-      endcapCandidateMeshes > 0
-        ? "Conclusion: POSSIBLE EMC endcap geometry exists."
-        : "Conclusion: NO obvious EMC endcap mesh found.",
-    ];
-    setDebugPanelText(lines.join("\n"));
   } catch (err) {
-    setDebugPanelText(`EMC debug failed: ${err?.message || err}`);
+    console.warn("EMC endcap recolor skipped:", err);
   }
 }
 
@@ -485,10 +425,10 @@ function setupImportUi() {
 
 async function doLoadPhoenix() {
   currentEventDisplay = await loadPhoenix(viewerEl);
+  await recolorEmcEndcaps(currentEventDisplay);
   scheduleBindTrackInteractions();
   setStatus("探测器几何已加载，等待导入事例", "ok");
   setImportStatus("几何就绪，可以导入事例 JSON ↑");
-  await updateEmcDebugPanel(currentEventDisplay);
 }
 
 // ── PID interaction init ──────────────────────────────────────────────────────
@@ -523,18 +463,15 @@ async function boot() {
       await loadJsrootGeometry(viewerEl, getGeometryList());
       setStatus("JSROOT 几何已加载，等待导入事例", "ok");
       setImportStatus("几何就绪，可以导入事例 JSON ↑");
-      setDebugPanelText("Phoenix unavailable; JSROOT fallback has no EMC tree debug.");
     } catch (jsrootErr) {
       console.warn("JSROOT loading failed, switch to Three.js fallback:", jsrootErr);
       try {
         const topName = await loadThreeFallback(viewerEl, getGeometryList());
         setStatus(`回退预览已加载 (${topName})`, "warn");
         setImportStatus("几何就绪，可以导入事例 JSON ↑");
-        setDebugPanelText("Three.js fallback mode; EMC endcap debug is not available.");
       } catch (fallbackErr) {
         console.error(fallbackErr);
         setStatus(`加载失败: ${fallbackErr.message}`, "err");
-        setDebugPanelText(`Geometry load failed: ${fallbackErr.message || fallbackErr}`);
       }
     }
   }

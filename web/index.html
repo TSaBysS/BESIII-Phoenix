@@ -290,28 +290,6 @@
       #timelinePanel.open { display: flex; }
       #timelineSlider { width: 260px; }
       #timelineTime { min-width: 76px; text-align: right; font-size: 12px; color: #9fc2ff; }
-      #debugPanel {
-        position: fixed;
-        left: 12px;
-        bottom: 12px;
-        z-index: 32;
-        width: 360px;
-        max-height: 34vh;
-        overflow: auto;
-        padding: 8px 10px;
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        background: rgba(10, 16, 28, 0.92);
-        color: #bdd7ff;
-        font-size: 11px;
-        line-height: 1.35;
-        white-space: pre-wrap;
-      }
-      #debugPanel .title {
-        font-weight: 700;
-        color: #e2eeff;
-        margin-bottom: 4px;
-      }
       .ok { color: #72e072; }
       .warn { color: #ffcc66; }
       .err { color: #ff8888; }
@@ -388,10 +366,6 @@
     </div>
     <div id="trackHoverTip"></div>
     <div id="trackInfoPanel"></div>
-    <div id="debugPanel">
-      <div class="title">Debug (temporary)</div>
-      <div id="debugPanelText">等待几何加载...</div>
-    </div>
     <div id="viewer"></div>
 
     <script>
