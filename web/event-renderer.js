@@ -36,6 +36,25 @@ export function scaleEventPoint(p) {
   return [x * EVENT_GLOBAL_R_SCALE, y * EVENT_GLOBAL_R_SCALE, z * EVENT_GLOBAL_R_SCALE];
 }
 
+/** MDC envelope in mm (display-only clip for MC truth polylines; JSON stays full helix). */
+const MDC_DRAW_R_MM = 810;
+const MDC_DRAW_Z_MM = 1450;
+
+function clipMcTruthPosToMdcCylinder(pos) {
+  if (!Array.isArray(pos)) return [];
+  const r2 = MDC_DRAW_R_MM * MDC_DRAW_R_MM;
+  const zm = MDC_DRAW_Z_MM;
+  const out = [];
+  for (const p of pos) {
+    if (!Array.isArray(p) || p.length < 3) continue;
+    const x = Number(p[0]), y = Number(p[1]), z = Number(p[2]);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+    if (x * x + y * y <= r2 + 1e-6 && Math.abs(z) <= zm + 1e-6) out.push(p);
+    else break;
+  }
+  return out;
+}
+
 export function estimateEmcRadius(scene, THREE) {
   try {
     const emcObj = scene.getObjectByName?.("emc");
@@ -105,7 +124,9 @@ export async function buildCustomEventOverlay(
 
   // ── tracks ──────────────────────────────────────────────────────────────────
   for (const t of tracks) {
-    const pos = t?.pos || [];
+    const rawPos = t?.pos || [];
+    if (!Array.isArray(rawPos) || rawPos.length < 2) continue;
+    const pos = t?.mode === "mc" ? clipMcTruthPosToMdcCylinder(rawPos) : rawPos;
     if (!Array.isArray(pos) || pos.length < 2) continue;
     const points = pos
       .filter((p) => Array.isArray(p) && p.length >= 3)
