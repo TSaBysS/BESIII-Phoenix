@@ -155,7 +155,7 @@ function renderShowerInfoPanel(showerInfo) {
     `<div class="kv"><strong>Truth Energy:</strong> ${Number.isFinite(truthE) ? truthE.toFixed(3) : "N/A"} GeV</div>`,
     `<div class="kv"><strong>Truth Momentum:</strong> ${Number.isFinite(truthP) ? truthP.toFixed(3) : "N/A"} GeV/c</div>`,
   ];
-  _trackInfoPanelEl.innerHTML = `<h4>Shower Detail (MC)</h4>${rows.join("")}`;
+  _trackInfoPanelEl.innerHTML = `<h4>EMC Shower</h4>${rows.join("")}`;
   _trackInfoPanelEl.classList.add("open");
 }
 
@@ -436,9 +436,7 @@ export async function bindTrackInteractionsIfNeeded() {
       interactionState.selectedTrackId = tid;
       renderTrackInfoPanel(info);
     } else {
-      const ev = getCurrentEvent();
-      const hasMcTruth = Array.isArray(ev?.Tracks?.["MC Truth"]) && ev.Tracks["MC Truth"].length > 0;
-      if (!hasMcTruth) return;
+      // Shower panel works for pure REC events too (truth fields show N/A when absent).
       const shower = target?.type === "shower" ? target.data : null;
       if (!shower) return;
       interactionState.selectedTrackId = null;
