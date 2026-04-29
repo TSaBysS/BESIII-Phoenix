@@ -66,8 +66,6 @@ bash scripts/bes3_visualize.sh prepare-event /path/to/run.rec
 # 整个目录下所有 REC 文件
 bash scripts/bes3_visualize.sh prepare-event /path/to/rec_dir/
 
-# 开启 helix5 调试信息
-bash scripts/bes3_visualize.sh prepare-event /path/to/run.rec --helix-debug
 ```
 
 输出到 `data/events/event.rec.json`。
@@ -83,7 +81,6 @@ python3 scripts/prepare_events.py --help
 - `output_json`：输出 JSON 文件路径
 - `--rec-dir DIR`：从目录批量读取多个 REC 文件
 - `--select FILE`：按 `(runId, eventId)` 对列表筛选指定事例
-- `--with-helix5`：同时输出 5 参数螺旋线调试信息
 
 ---
 

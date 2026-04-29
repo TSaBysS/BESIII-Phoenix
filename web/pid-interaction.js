@@ -105,7 +105,6 @@ export function getTrackInfoById(trackId) {
   if (ev?.Tracks) {
     const all = [
       ...(Array.isArray(ev.Tracks["REC MdcTrack (stable)"]) ? ev.Tracks["REC MdcTrack (stable)"] : []),
-      ...(Array.isArray(ev.Tracks["REC MdcTrack (helix5)"]) ? ev.Tracks["REC MdcTrack (helix5)"] : []),
       ...(Array.isArray(ev.Tracks["MC Truth"]) ? ev.Tracks["MC Truth"] : []),
     ];
     const src = all.find((t) => Number(t?.trackId) === tid);
@@ -129,7 +128,7 @@ export function refreshTrackSelectionVisuals() {
       const baseOpac = Number(
         ud.kind === "track_points"
           ? (ud.mode === "mc" ? 0.88 : 0.86)
-          : (ud.mode === "mc" ? 0.94 : (ud.mode === "helix5" ? 0.8 : 0.92)),
+          : (ud.mode === "mc" ? 0.94 : 0.92),
       );
       if (isSelected) {
         mat.opacity = Math.min(1.0, baseOpac + 0.08);
@@ -143,7 +142,7 @@ export function refreshTrackSelectionVisuals() {
         if (ud.kind === "track_points" && Number.isFinite(mat.size))
           mat.size = ud.mode === "mc" ? 4.2 : 3.6;
         if (mat.color?.setHex) {
-          const fallback = ud.mode === "helix5" ? 0x6bb8ff : (ud.mode === "mc" ? 0x40c4ff : 0xff6161);
+          const fallback = ud.mode === "mc" ? 0x40c4ff : 0xff6161;
           mat.color.setHex(fallback);
         }
       }

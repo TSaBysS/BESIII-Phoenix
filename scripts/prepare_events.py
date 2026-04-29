@@ -943,7 +943,7 @@ def build_track_points_from_mdc_helix(mdc_trk, kal_ref=None, n_points=90, r_limi
     return pts, info
 
 
-def convert_rec_to_event(rec_path, include_helix5=False, entry_idx=0):
+def convert_rec_to_event(rec_path, entry_idx=0):
     f = uproot.open(rec_path)
     tree = f["Event"]
 
@@ -1030,7 +1030,6 @@ def convert_rec_to_event(rec_path, include_helix5=False, entry_idx=0):
     selected_kal_ids = list(dict.fromkeys(selected_kal_ids))
 
     tracks_stable = []
-    tracks_helix5 = []
 
     # Prefer Kal tracks.
     for kid in selected_kal_ids:
@@ -1081,60 +1080,8 @@ def convert_rec_to_event(rec_path, include_helix5=False, entry_idx=0):
             t["mode"] = "stable"
             tracks_stable.append(t)
 
-    mdc_rmax = get_mdc_radius_max()
-    if include_helix5:
-        # Build helix5 from REC MDC helix, constrained by linked Kal lpoint when available.
-        src_mdc_for_helix = selected_mdc_ids if selected_mdc_ids else list(range(len(tracks_col)))
-        for mid in src_mdc_for_helix:
-            if mid < 0 or mid >= len(tracks_col):
-                continue
-            mtrk = tracks_col[mid]
-            helix = _safe_get(mtrk, "m_helix")
-            if helix is None or len(helix) < 5:
-                continue
-            kid = mdc_to_kal.get(mid, -1)
-            if kid < 0:
-                mtid = int(_safe_get(mtrk, "m_trackId", -1))
-                kid = kal_by_trackid.get(mtid, -1)
-            kal_ref = kal_col[kid] if kid >= 0 and kid < len(kal_col) else None
-            pos_helix5, helix5_debug = build_track_points_from_mdc_helix(
-                mtrk,
-                kal_ref=kal_ref,
-                r_limit=mdc_rmax + 10.0,
-                z_limit=1400.0,
-            )
-            if len(pos_helix5) < 2:
-                continue
-            dr, phi0, kappa, dz, tanl = [float(x) for x in helix[:5]]
-            theta = math.atan2(1.0, tanl) if abs(tanl) > 1e-12 else math.pi / 2.0
-            p = 1.0 / abs(kappa) * math.sqrt(1.0 + tanl * tanl) if abs(kappa) > 1e-6 else 9999.0
-            q = 1.0 if kappa > 0 else -1.0
-            tracks_helix5.append(
-                {
-                    "trackId": int(_safe_get(mtrk, "m_trackId", mid)),
-                    "chi2": float(_safe_get(mtrk, "m_chi2", 0.0)),
-                    "dof": int(_safe_get(mtrk, "m_ndof", 0)),
-                    "nhits": int(_safe_get(mtrk, "m_nhits", 0)),
-                    "phi": phi0,
-                    "theta": theta,
-                    "dparams": [dr * LENGTH_SCALE, dz * LENGTH_SCALE, phi0, theta, q / max(p, 1e-6)],
-                    "pt_debug": {"p_est": p, "q": q, "kappa": kappa, "source": "mdc_helix"},
-                    "pid": build_pid_info(
-                        int(_safe_get(mtrk, "m_trackId", mid)),
-                        p,
-                        dedx_by_tid.get(int(_safe_get(mtrk, "m_trackId", mid))),
-                        tof_by_tid.get(int(_safe_get(mtrk, "m_trackId", mid)), []),
-                        emc_by_tid.get(int(_safe_get(mtrk, "m_trackId", mid))),
-                    ),
-                    "pos": pos_helix5,
-                    "color": "0x42a5f5",
-                    "mode": "helix5",
-                    "helix5_debug": helix5_debug,
-                }
-            )
-
     # Fallback to Mdc tracks if Kal links are unavailable.
-    if not tracks_stable and not tracks_helix5:
+    if not tracks_stable:
         src_indices = selected_mdc_ids if selected_mdc_ids else list(range(len(tracks_col)))
         for mid in src_indices:
             if mid < 0 or mid >= len(tracks_col):
@@ -1424,7 +1371,6 @@ def convert_rec_to_event(rec_path, include_helix5=False, entry_idx=0):
             "time": "REC data",
             "Tracks": {
                 "REC MdcTrack (stable)": tracks_stable,
-                "REC MdcTrack (helix5)": tracks_helix5,
                 "MC Truth": mc_tracks,
             },
             "CaloClusters": {"REC EmcShower": clusters},
@@ -1436,7 +1382,6 @@ def convert_rec_to_event(rec_path, include_helix5=False, entry_idx=0):
             },
             "DebugMeta": {
                 "track_count_stable": len(tracks_stable),
-                "track_count_helix5": len(tracks_helix5),
                 "track_count_mc": len(mc_tracks),
                 "cluster_count": len(clusters),
                 "mdc_hit_count": len(mdc_hits),
@@ -1481,11 +1426,6 @@ def main():
         metavar="PAIRS_TXT",
         help="Text file with 'runId eventId' per line; only convert matching entries from rec_file",
     )
-    parser.add_argument(
-        "--with-helix5",
-        action="store_true",
-        help="Enable helix5 (blue track) computation for debugging only",
-    )
     args = parser.parse_args()
 
     # Mode 1: --select filter from a single multi-event rec file.
@@ -1509,7 +1449,7 @@ def main():
             if key not in index_map:
                 missing.append(key)
                 continue
-            out.update(convert_rec_to_event(args.rec_file, include_helix5=args.with_helix5, entry_idx=index_map[key]))
+            out.update(convert_rec_to_event(args.rec_file, entry_idx=index_map[key]))
         if not out:
             raise RuntimeError("No selected events converted. Check --select file and rec_file.")
         if missing:
@@ -1525,7 +1465,7 @@ def main():
         out = {}
         for rp in rec_files:
             try:
-                out.update(convert_rec_to_event(str(rp), include_helix5=args.with_helix5))
+                out.update(convert_rec_to_event(str(rp)))
             except Exception as e:
                 print(f"[warn] Skip {rp.name}: {e}")
         if not out:
@@ -1535,7 +1475,7 @@ def main():
     else:
         if not args.rec_file:
             raise ValueError("rec_file is required unless --rec-dir is provided")
-        out = convert_rec_to_event(args.rec_file, include_helix5=args.with_helix5, entry_idx=0)
+        out = convert_rec_to_event(args.rec_file, entry_idx=0)
 
     out_path = Path(args.output_json)
     out_path.parent.mkdir(parents=True, exist_ok=True)

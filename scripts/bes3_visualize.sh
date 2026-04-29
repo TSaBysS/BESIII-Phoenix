@@ -57,11 +57,8 @@ PREPARE() {
 PREPARE_EVENT() {
   local rec_file="/afs/ihep.ac.cn/users/y/yanjiazhen/nphy/Knunubar/rawData/outputs/44113_374390.rec"
   local rec_dir=""
-  local helix_debug=0
   for arg in "$@"; do
-    if [[ "$arg" == "--helix-debug" ]]; then
-      helix_debug=1
-    elif [[ -d "$arg" ]]; then
+    if [[ -d "$arg" ]]; then
       rec_dir="$arg"
     elif [[ -n "$arg" ]]; then
       rec_file="$arg"
@@ -71,18 +68,10 @@ PREPARE_EVENT() {
   mkdir -p "${BASE_DIR}/data/events"
   if [[ -n "${rec_dir}" ]]; then
     echo "[event] Convert all REC files in directory: ${rec_dir}"
-    if [[ "${helix_debug}" -eq 1 ]]; then
-      python3 "${REC2PHX}" --with-helix5 --rec-dir "${rec_dir}" "${out_json}"
-    else
-      python3 "${REC2PHX}" --rec-dir "${rec_dir}" "${out_json}"
-    fi
+    python3 "${REC2PHX}" --rec-dir "${rec_dir}" "${out_json}"
   else
     echo "[event] Convert REC to Phoenix JSON..."
-    if [[ "${helix_debug}" -eq 1 ]]; then
-      python3 "${REC2PHX}" --with-helix5 "${rec_file}" "${out_json}"
-    else
-      python3 "${REC2PHX}" "${rec_file}" "${out_json}"
-    fi
+    python3 "${REC2PHX}" "${rec_file}" "${out_json}"
   fi
   echo "[event] Wrote: ${out_json}"
 }
@@ -96,18 +85,11 @@ SERVE() {
 
 VIEW() {
   local det="${1:-assembled_besiii}"
-  local helix_debug=0
-  for arg in "$@"; do
-    if [[ "$arg" == "--helix-debug" ]]; then
-      helix_debug=1
-    fi
-  done
   # Patch the inline defaults in index.html in-place.
   sed -i \
     -e "s|window\.BES3_SELECTED_VIEW\s*=.*|window.BES3_SELECTED_VIEW      = \"${det}\";|" \
-    -e "s|window\.BES3_ENABLE_HELIX_DEBUG\s*=.*|window.BES3_ENABLE_HELIX_DEBUG = ${helix_debug};|" \
     "${WEB_DIR}/index.html"
-  echo "Selected view: ${det} (helix debug=${helix_debug})"
+  echo "Selected view: ${det}"
 }
 
 LIST() {
@@ -130,9 +112,9 @@ case "${cmd}" in
   *)
     echo "Usage:"
     echo "  bash scripts/bes3_visualize.sh prepare"
-    echo "  bash scripts/bes3_visualize.sh prepare-event [rec-file|rec-dir] [--helix-debug]"
+    echo "  bash scripts/bes3_visualize.sh prepare-event [rec-file|rec-dir]"
     echo "  bash scripts/bes3_visualize.sh list"
-    echo "  bash scripts/bes3_visualize.sh view <assembled_besiii|mdc|tof|muc|cgem|emc> [--helix-debug]"
+    echo "  bash scripts/bes3_visualize.sh view <assembled_besiii|mdc|tof|muc|cgem|emc>"
     echo "  bash scripts/bes3_visualize.sh serve [port]"
     ;;
 esac

@@ -325,14 +325,6 @@
       <span>BESIII Phoenix</span>
       <span id="status" class="warn" style="margin-left: 12px;">Initializing...</span>
       <span style="margin-left: 12px;">JSON: <code id="jsonPath"></code></span>
-      <label style="margin-left: 12px;">
-        Track mode:
-        <select id="trackModeSelect">
-          <option value="stable" selected>stable</option>
-          <option value="helix5">helix5</option>
-          <option value="both">both</option>
-        </select>
-      </label>
       <label id="mcTruthWrap" style="margin-left: 12px; display: none;">
         <input type="checkbox" id="chkMcTruth" />
         MC truth
@@ -386,9 +378,8 @@
         cgem: "../data/views/cgem.root.json",
         emc:  "../data/views/emc_approx.root.json",
       };
-      // View / debug settings (overridden by `bes3_visualize.sh view <det>`).
+      // View settings (overridden by `bes3_visualize.sh view <det>`).
       window.BES3_SELECTED_VIEW      = window.BES3_SELECTED_VIEW      ?? "assembled_besiii";
-      window.BES3_ENABLE_HELIX_DEBUG = window.BES3_ENABLE_HELIX_DEBUG ?? 0;
     </script>
     <script type="importmap">
       {

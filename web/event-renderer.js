@@ -6,7 +6,6 @@
  *
  * Detector colour / style notes (restored from legacy version):
  *   REC track (stable) : red   0xff4d4d
- *   REC track (helix5) : blue  0x42a5f5
  *   MC truth track     : light-blue 0x90caf9
  *   MDC fired wire     : red   0xff4d4d (BesVis style)
  *   TOF barrel hit     : cyan  0x4dd0e1
@@ -66,28 +65,20 @@ export async function buildCustomEventOverlay(
   eventsData,
   selectedEventKey = "",
   showMcTruth = false,
-  helixDebugEnabled = false,
-  trackModeSelectEl = null,
 ) {
   const allKeys  = Object.keys(eventsData || {});
   const eventKey = allKeys.includes(selectedEventKey) ? selectedEventKey : allKeys[0];
   if (!eventKey) return 0;
 
   const ev        = eventsData[eventKey] || {};
-  const trkMode   = helixDebugEnabled ? (trackModeSelectEl?.value || "stable") : "stable";
-
   const trackStable = Array.isArray(ev?.Tracks?.["REC MdcTrack (stable)"]) ? ev.Tracks["REC MdcTrack (stable)"] : [];
-  const trackHelix5 = Array.isArray(ev?.Tracks?.["REC MdcTrack (helix5)"]) ? ev.Tracks["REC MdcTrack (helix5)"] : [];
   const trackMc     = Array.isArray(ev?.Tracks?.["MC Truth"]) ? ev.Tracks["MC Truth"] : [];
   const mdcHits     = Array.isArray(ev?.Hits?.["REC MdcHit"]) ? ev.Hits["REC MdcHit"] : [];
   const emcHits     = Array.isArray(ev?.Hits?.["REC EmcHit"]) ? ev.Hits["REC EmcHit"] : [];
   const tofHits     = Array.isArray(ev?.Hits?.["REC TofHit"]) ? ev.Hits["REC TofHit"] : [];
   const mucHits     = Array.isArray(ev?.Hits?.["REC MucHit"]) ? ev.Hits["REC MucHit"] : [];
 
-  let tracks = [];
-  if (trkMode === "stable")      tracks = [...trackStable];
-  else if (trkMode === "helix5") tracks = [...trackHelix5];
-  else                           tracks = [...trackStable, ...trackHelix5];
+  let tracks = [...trackStable];
   if (showMcTruth) tracks.push(...trackMc);
   if (tracks.length === 0 && ev?.Tracks) tracks = Object.values(ev.Tracks).flat();
 
@@ -126,9 +117,9 @@ export async function buildCustomEventOverlay(
     if (points.length < 2) continue;
 
     const geo = new THREE.BufferGeometry().setFromPoints(points);
-    // Colour convention: red=stable, blue=helix5, light-blue=MC truth.
-    const lineColor = t?.mode === "helix5" ? 0x42a5f5 : (t?.mode === "mc" ? 0x90caf9 : 0xff4d4d);
-    const lineOpac  = t?.mode === "helix5" ? 0.80    : (t?.mode === "mc" ? 0.72     : 0.92);
+    // Colour convention: red=stable, light-blue=MC truth.
+    const lineColor = t?.mode === "mc" ? 0x90caf9 : 0xff4d4d;
+    const lineOpac  = t?.mode === "mc" ? 0.72     : 0.92;
     const mat = new THREE.LineBasicMaterial({
       color: lineColor, transparent: true, opacity: lineOpac, depthTest: false, depthWrite: false,
     });
@@ -149,7 +140,7 @@ export async function buildCustomEventOverlay(
     trackCandidateCache.push(line);
 
     // Dense luminous point cloud for visibility.
-    const ptColor = t?.mode === "helix5" ? 0x6bb8ff : (t?.mode === "mc" ? 0x40c4ff : 0xff6161);
+    const ptColor = t?.mode === "mc" ? 0x40c4ff : 0xff6161;
     const ptMat = new THREE.PointsMaterial({
       color: ptColor, size: t?.mode === "mc" ? 4.2 : 3.6, sizeAttenuation: true,
       transparent: true, opacity: t?.mode === "mc" ? 0.88 : 0.86, depthTest: false, depthWrite: false,

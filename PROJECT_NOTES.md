@@ -222,14 +222,10 @@ helix = [dr, φ₀, κ, dz, tanλ]
 
 最后再降级到基本螺旋参数化（`build_track_points`），不依赖任何 Kal 信息。
 
-### 调试路径：helix5 模式
-
-用 MDC 原始 helix + BesVis 风格的磁场步进积分，显示为**蓝色**，仅在 `--helix-debug` 模式下启用。
-
 ### 渲染
 
 - 折线（Three.js `Line`）+ 密集点云（Three.js `Points`）
-- 颜色：red `0xff4d4d`（stable），blue `0x42a5f5`（helix5），light-blue `0x90caf9`（MC truth）
+- 颜色：red `0xff4d4d`（stable），light-blue `0x90caf9`（MC truth）
 - `depthTest: false`，`renderOrder: 999/998`，确保显示在探测器几何之上
 
 ---
@@ -308,7 +304,7 @@ PID 功能由 `web/pid-tools.js`（算法与格式化）和 `web/pid-interaction
 
 - 当前 PID 面板面向 **重建轨迹**；MC truth 轨迹本身不做 PID 拟合
 - PID 依赖输入 REC 中的 dE/dx 与关联关系，若上游未写入则前端只能显示几何/运动学信息
-- 同一 `trackId` 在 stable/helix5 模式下可能对应不同采样点集，PID 信息以轨迹关联字段为准，不随绘制采样变化
+- PID 面板面向重建稳定轨迹（stable），并可附加显示其 MC truth 几何匹配信息。
 
 ---
 

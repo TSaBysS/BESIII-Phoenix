@@ -66,38 +66,64 @@ export function setPhoenixApi(v)  { phoenixApi  = v; }
 
 // ── geometry opacity helpers ──────────────────────────────────────────────────
 
+function findNamedGeometryRoots(geometries, objectName) {
+  if (!geometries || !objectName) return [];
+  const exact = geometries.getObjectByName?.(objectName);
+  if (exact) return [exact];
+  const roots = [];
+  const key = String(objectName).toLowerCase();
+  geometries.traverse?.((obj) => {
+    const n = String(obj?.name || "").toLowerCase();
+    if (!n) return;
+    // Fallback for Phoenix builds that preserve original GDML volume names
+    // (e.g. logicalEMC) instead of the loadRootJSONGeometry alias.
+    if (n.includes(key)) roots.push(obj);
+  });
+  return roots;
+}
+
 export function applyOpacityToNamedGeometry(eventDisplay, objectName, alpha = 0.1) {
   try {
     const tm = eventDisplay?.getThreeManager?.();
     const sm = tm?.getSceneManager?.();
     const geometries = sm?.getGeometries?.() || sm?.getScene?.();
     if (!geometries) return;
-    const root = geometries.getObjectByName?.(objectName);
-    if (!root) return;
+    const roots = findNamedGeometryRoots(geometries, objectName);
+    if (!roots.length) return;
     const a = Math.max(0, Math.min(1, Number(alpha)));
-    root.traverse((obj) => {
-      const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
-      mats.forEach((mat) => {
-        if (!mat) return;
-        // Cache original material flags once so opacity 1.0 can fully restore state.
-        if (!mat.userData.__bes3OpacityOriginal) {
-          mat.userData.__bes3OpacityOriginal = {
-            transparent: Boolean(mat.transparent),
-            opacity: Number.isFinite(Number(mat.opacity)) ? Number(mat.opacity) : 1,
-            depthWrite: Boolean(mat.depthWrite),
-          };
-        }
-        const orig = mat.userData.__bes3OpacityOriginal;
-        if (a >= 0.999) {
-          mat.transparent = orig.transparent;
-          mat.opacity = orig.opacity;
-          mat.depthWrite = orig.depthWrite;
-        } else {
-          mat.transparent = true;
-          mat.opacity = a;
-          mat.depthWrite = false;
-        }
-        mat.needsUpdate = true;
+    roots.forEach((root) => {
+      root.traverse((obj) => {
+        const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
+        mats.forEach((mat) => {
+          if (!mat) return;
+          // Cache original material flags once so opacity 1.0 can fully restore state.
+          if (!mat.userData.__bes3OpacityOriginal) {
+            mat.userData.__bes3OpacityOriginal = {
+              transparent: Boolean(mat.transparent),
+              opacity: Number.isFinite(Number(mat.opacity)) ? Number(mat.opacity) : 1,
+              depthWrite: Boolean(mat.depthWrite),
+            };
+          }
+          const orig = mat.userData.__bes3OpacityOriginal;
+          if (a >= 0.999) {
+            // EMC may contain source materials with very low/default opacity in some
+            // geometry exports; force fully opaque when user sets alpha to 1.
+            if (objectName === "emc") {
+              mat.transparent = false;
+              mat.opacity = 1.0;
+              mat.depthWrite = true;
+            } else {
+              mat.transparent = orig.transparent;
+              mat.opacity = orig.opacity;
+              mat.depthWrite = orig.depthWrite;
+            }
+          } else {
+            mat.transparent = true;
+            mat.opacity = a;
+            mat.depthWrite = false;
+          }
+          mat.needsUpdate = true;
+        });
       });
     });
   } catch (err) {
@@ -121,15 +147,17 @@ async function forceDoubleSidedForNamedGeometry(eventDisplay, objectName) {
     const sm = tm?.getSceneManager?.();
     const geometries = sm?.getGeometries?.() || sm?.getScene?.();
     if (!geometries) return;
-    const root = geometries.getObjectByName?.(objectName);
-    if (!root) return;
-    root.traverse((obj) => {
-      const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
-      mats.forEach((mat) => {
-        if (!mat) return;
-        if (!mat.userData.__bes3SideOriginal) mat.userData.__bes3SideOriginal = mat.side;
-        mat.side = THREE.DoubleSide;
-        mat.needsUpdate = true;
+    const roots = findNamedGeometryRoots(geometries, objectName);
+    if (!roots.length) return;
+    roots.forEach((root) => {
+      root.traverse((obj) => {
+        const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
+        mats.forEach((mat) => {
+          if (!mat) return;
+          if (!mat.userData.__bes3SideOriginal) mat.userData.__bes3SideOriginal = mat.side;
+          mat.side = THREE.DoubleSide;
+          mat.needsUpdate = true;
+        });
       });
     });
   } catch (err) {

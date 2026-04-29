@@ -32,7 +32,6 @@ import {
 const viewerEl            = document.getElementById("viewer");
 const statusEl            = document.getElementById("status");
 const jsonPathEl          = document.getElementById("jsonPath");
-const trackModeSelectEl   = document.getElementById("trackModeSelect");
 const eventSelectEl       = document.getElementById("eventSelect");
 const chkMcTruthEl        = document.getElementById("chkMcTruth");
 const mcTruthWrapEl       = document.getElementById("mcTruthWrap");
@@ -61,8 +60,6 @@ const dropOverlayEl       = document.getElementById("dropOverlay");
 // ── runtime state ─────────────────────────────────────────────────────────────
 
 const urlParams = new URLSearchParams(window.location.search);
-const trackModeFromQuery      = urlParams.get("trkmode") || "stable";
-const helixDebugEnabled       = urlParams.get("helixdbg") === "1" || Boolean(window.BES3_ENABLE_HELIX_DEBUG);
 const selectedEventKeyFromQuery = urlParams.get("evt") || "";
 const showMcFromQuery         = urlParams.get("mc") === "1";
 const showTruthFromQuery      = urlParams.get("truth") === "1" || showMcFromQuery;
@@ -103,20 +100,6 @@ function setStatus(text, klass) {
   if (klass === "ok") { setLoaderProgress(100); hideLoaderOverlay(200); }
   else if (klass === "warn" || klass === "err") { setLoaderProgress(96); hideLoaderOverlay(300); }
   else { setLoaderProgress(Math.min(92, loaderProgressValue + 8)); }
-}
-
-// ── track-mode selector ───────────────────────────────────────────────────────
-
-if (trackModeSelectEl) {
-  trackModeSelectEl.value = ["stable", "helix5", "both"].includes(trackModeFromQuery) ? trackModeFromQuery : "stable";
-  if (!helixDebugEnabled) {
-    trackModeSelectEl.value = "stable";
-    Array.from(trackModeSelectEl.options).forEach((op) => { if (op.value !== "stable") op.style.display = "none"; });
-    trackModeSelectEl.disabled = true;
-    const parent = trackModeSelectEl.closest("label");
-    if (parent) parent.style.display = "none";
-  }
-  trackModeSelectEl.addEventListener("change", () => renderSelectedEventOverlay());
 }
 
 // ── opacity slider UI setup ───────────────────────────────────────────────────
@@ -243,7 +226,6 @@ async function renderSelectedEventOverlay() {
   const showMc = setupMcTruthUi(selectedEvent || {});
   const result = await buildCustomEventOverlay(
     currentEventDisplay, cachedEventsData, selectedEventKey, showMc,
-    helixDebugEnabled, trackModeSelectEl,
   );
   if (result && result.group) {
     currentOverlayGroup = result.group;
@@ -276,7 +258,6 @@ async function applyEventData(data, filename) {
 
   const result = await buildCustomEventOverlay(
     currentEventDisplay, cachedEventsData, selectedEventKey, showMc,
-    helixDebugEnabled, trackModeSelectEl,
   );
   if (result && result.group) {
     currentOverlayGroup = result.group;

@@ -55,8 +55,7 @@ function sumProbMap(map) {
 
 function collectionPriority(coll) {
   if (coll === "stable") return 0;
-  if (coll === "helix5") return 1;
-  return 2;
+  return 1;
 }
 
 function previewPid(pid) {
@@ -90,11 +89,9 @@ export function selectPidForTrack(eventData, trackId, trackInfo = null) {
   if (!eventData?.Tracks || !Number.isFinite(tid)) return empty;
 
   const stable = Array.isArray(eventData.Tracks["REC MdcTrack (stable)"]) ? eventData.Tracks["REC MdcTrack (stable)"] : [];
-  const helix5 = Array.isArray(eventData.Tracks["REC MdcTrack (helix5)"]) ? eventData.Tracks["REC MdcTrack (helix5)"] : [];
   const mc = Array.isArray(eventData.Tracks["MC Truth"]) ? eventData.Tracks["MC Truth"] : [];
   const withMeta = [
     ...stable.map((t) => ({ t, coll: "stable" })),
-    ...helix5.map((t) => ({ t, coll: "helix5" })),
     ...mc.map((t) => ({ t, coll: "mc" })),
   ];
 
