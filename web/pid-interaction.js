@@ -22,7 +22,9 @@ async function getThree() {
 export const interactionState = {
   pidMode: false,
   truthMode: false,
+  /** @type {number|null} */
   hoveredTrackId: null,
+  /** @type {number|null} */
   selectedTrackId: null,
 };
 
@@ -98,6 +100,11 @@ function getShowerCandidateObjects() {
     if (obj?.isMesh) out.push(obj);
   });
   return out;
+}
+
+function getCurrentEvent() {
+  const selectedEventKey = _eventSelectEl?.value || "";
+  return (selectedEventKey && _cachedEventsData?.()?.[selectedEventKey]) ? _cachedEventsData()[selectedEventKey] : null;
 }
 
 export function getTrackInfoById(trackId) {
@@ -338,6 +345,44 @@ export async function bindTrackInteractionsIfNeeded() {
     return pickTrackByScreenProximity(evt);
   };
 
+  const pickTarget = async (evt) => {
+    if (!interactionState.pidMode || !_interactionCanvas) return null;
+    const rect = _interactionCanvas?.getBoundingClientRect?.() || _viewerEl.getBoundingClientRect();
+    raycaster.mouse.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+    raycaster.mouse.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+    const camera = getMainCamera();
+    camera?.updateMatrixWorld?.(true);
+    if (!camera) return null;
+    raycaster.instance.setFromCamera(raycaster.mouse, camera);
+
+    const showerObjs = getShowerCandidateObjects();
+    const trackObjs = getPidSelectableObjects();
+    const allObjs = [...showerObjs, ...trackObjs];
+    const hits = raycaster.instance.intersectObjects(allObjs, false);
+    if (hits.length) {
+      const firstTrack = hits.find((h) => {
+        const k = h?.object?.userData?.kind;
+        return k === "track" || k === "track_points";
+      });
+      const firstShower = hits.find((h) => h?.object?.userData?.kind === "emc_shower");
+      if (evt?.shiftKey && firstShower) {
+        return { type: "shower", data: firstShower.object.userData };
+      }
+      if (evt?.altKey && firstTrack) {
+        return { type: "track", data: Number(firstTrack.object?.userData?.trackId) };
+      }
+      const h0 = hits[0];
+      if (h0?.object?.userData?.kind === "emc_shower") {
+        return { type: "shower", data: h0.object.userData };
+      }
+      const tid = Number(h0?.object?.userData?.trackId);
+      if (Number.isFinite(tid)) return { type: "track", data: tid };
+    }
+    const fallbackTrack = await pickTrackByScreenProximity(evt);
+    if (Number.isFinite(Number(fallbackTrack))) return { type: "track", data: Number(fallbackTrack) };
+    return null;
+  };
+
   const pickShower = async (evt) => {
     if (!interactionState.pidMode || !_interactionCanvas) return null;
     const rect = _interactionCanvas?.getBoundingClientRect?.() || _viewerEl.getBoundingClientRect();
@@ -359,15 +404,16 @@ export async function bindTrackInteractionsIfNeeded() {
       updateInteractionCursor();
       return;
     }
-    const tid = await pickTrack(evt);
+    const target = await pickTarget(evt);
+    const tid = target?.type === "track" ? Number(target.data) : null;
     interactionState.hoveredTrackId = tid;
-    if (tid !== null && tid !== undefined && Number.isFinite(Number(tid))) {
+    if (target?.type === "track" && Number.isFinite(tid)) {
       const info = getTrackInfoById(tid);
       showTrackHoverTip(evt.clientX, evt.clientY, info?.mode === "mc" ? `Truth track ${tid}` : `Track ${tid} (click for PID)`);
+    } else if (target?.type === "shower") {
+      showTrackHoverTip(evt.clientX, evt.clientY, "Shower (click for detail, Shift=prefer shower)");
     } else {
-      const shower = await pickShower(evt);
-      if (shower) showTrackHoverTip(evt.clientX, evt.clientY, "Shower (click for MC truth)");
-      else hideTrackHoverTip();
+      hideTrackHoverTip();
     }
     updateInteractionCursor();
     refreshTrackSelectionVisuals();
@@ -382,16 +428,19 @@ export async function bindTrackInteractionsIfNeeded() {
 
   const onClick = async (evt) => {
     if (!interactionState.pidMode) return;
-    const tid = await pickTrack(evt);
-    if (tid !== null && tid !== undefined && Number.isFinite(Number(tid))) {
+    const target = await pickTarget(evt);
+    if (target?.type === "track") {
+      const tid = Number(target.data);
       const info = getTrackInfoById(tid);
       if (!info || info?.mode === "mc") return;
       interactionState.selectedTrackId = tid;
       renderTrackInfoPanel(info);
     } else {
-      const shower = await pickShower(evt);
+      const ev = getCurrentEvent();
+      const hasMcTruth = Array.isArray(ev?.Tracks?.["MC Truth"]) && ev.Tracks["MC Truth"].length > 0;
+      if (!hasMcTruth) return;
+      const shower = target?.type === "shower" ? target.data : null;
       if (!shower) return;
-      if (!Number.isFinite(Number(shower?.truthEnergyGeV)) && !Number.isFinite(Number(shower?.truthMomentumGeV))) return;
       interactionState.selectedTrackId = null;
       renderShowerInfoPanel(shower);
     }
