@@ -3,7 +3,6 @@ set -euo pipefail
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA_DIR="${BASE_DIR}/data/views"
-WEB_DIR="${BASE_DIR}/web"
 MACRO="${BASE_DIR}/scripts/export_geometry.C"
 GEOM_PY="${BASE_DIR}/scripts/prepare_geometry.py"
 REC2PHX="${BASE_DIR}/scripts/prepare_events.py"
@@ -51,7 +50,7 @@ PREPARE() {
   python3 "${GEOM_PY}" approximate "${EMC_GDML}" "${DATA_DIR}/Emc_approx.gdml"
   ROOT_EXPORT "${DATA_DIR}/Emc_approx.gdml" "${DATA_DIR}/emc_approx.root.json"
 
-  echo "Prepare completed. Use: bash scripts/bes3_visualize.sh serve"
+  echo "Prepare completed."
 }
 
 PREPARE_EVENT() {
@@ -76,45 +75,13 @@ PREPARE_EVENT() {
   echo "[event] Wrote: ${out_json}"
 }
 
-SERVE() {
-  local port="${1:-8010}"
-  echo "Open: http://127.0.0.1:${port}/web/"
-  cd "${BASE_DIR}"
-  python3 -m http.server "${port}"
-}
-
-VIEW() {
-  local det="${1:-assembled_besiii}"
-  # Patch the inline defaults in index.html in-place.
-  sed -i \
-    -e "s|window\.BES3_SELECTED_VIEW\s*=.*|window.BES3_SELECTED_VIEW      = \"${det}\";|" \
-    "${WEB_DIR}/index.html"
-  echo "Selected view: ${det}"
-}
-
-LIST() {
-  echo "Available views:"
-  echo "  assembled_besiii"
-  echo "  mdc"
-  echo "  tof"
-  echo "  muc"
-  echo "  cgem"
-  echo "  emc"
-}
-
 cmd="${1:-help}"
 case "${cmd}" in
   prepare) PREPARE ;;
   prepare-event) shift; PREPARE_EVENT "$@" ;;
-  serve) shift; SERVE "${1:-8010}" ;;
-  view) shift; VIEW "${1:-assembled_besiii}" "$@" ;;
-  list) LIST ;;
   *)
     echo "Usage:"
     echo "  bash scripts/bes3_visualize.sh prepare"
     echo "  bash scripts/bes3_visualize.sh prepare-event [rec-file|rec-dir]"
-    echo "  bash scripts/bes3_visualize.sh list"
-    echo "  bash scripts/bes3_visualize.sh view <assembled_besiii|mdc|tof|muc|cgem|emc>"
-    echo "  bash scripts/bes3_visualize.sh serve [port]"
     ;;
 esac

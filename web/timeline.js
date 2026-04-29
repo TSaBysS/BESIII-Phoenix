@@ -30,14 +30,10 @@ export function setOverlayGroup(g) { _overlayGroupRef = g; }
  */
 export function estimateEventTimeRange(ev, tracks, mdcHits, emcHits, tofHits, mucHits) {
   const values = [];
+  // Main timeline animation uses MDC/TOF hit timing.
+  // EMC/MUC are revealed after the main phase in event-renderer.
   for (const h of mdcHits) if (Number.isFinite(Number(h?.tdc))) values.push(Number(h.tdc));
-  for (const h of emcHits) if (Number.isFinite(Number(h?.time))) values.push(Number(h.time));
   for (const h of tofHits) if (Number.isFinite(Number(h?.tof))) values.push(Number(h.tof));
-  for (const h of mucHits) {
-    const tdc = Number(h?.timeChannel);
-    if (Number.isFinite(tdc) && tdc >= 0) values.push(tdc);
-    else if (Number.isFinite(Number(h?.depth))) values.push(Number(h.depth) * 5.0);
-  }
   if (values.length > 1) {
     const min = Math.min(...values);
     const max = Math.max(...values);

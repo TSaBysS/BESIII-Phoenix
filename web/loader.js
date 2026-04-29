@@ -37,6 +37,17 @@ function getSelectedView() {
   return window.BES3_SELECTED_VIEW || window.BES3_DEFAULT_VIEW || "assembled_besiii";
 }
 
+async function loadGeometryWithFallback(loader, entry) {
+  try {
+    await loader(entry.path, entry.key);
+  } catch (err) {
+    if (entry.key !== "emc") throw err;
+    const fallback = "../data/views/emc_approx.root.json";
+    console.warn(`EMC mesh cache load failed, fallback to ${fallback}:`, err);
+    await loader(fallback, entry.key);
+  }
+}
+
 export function getGeometryEntries(view = getSelectedView()) {
   const gm = geometryMap();
 
@@ -295,7 +306,10 @@ export async function loadPhoenix(viewerEl) {
       throw new Error("loadRootJSONGeometry() is unavailable in this Phoenix build");
     }
     for (const entry of entries) {
-      await eventDisplay.loadRootJSONGeometry(entry.path, entry.key);
+      await loadGeometryWithFallback(
+        (path, key) => eventDisplay.loadRootJSONGeometry(path, key),
+        entry,
+      );
     }
     // EMC endcaps can disappear when source normals are flipped; force double-sided.
     await forceDoubleSidedForNamedGeometry(eventDisplay, "emc");
@@ -306,7 +320,10 @@ export async function loadPhoenix(viewerEl) {
 
   if (apiObj?.loadRootJSONGeometry) {
     for (const entry of entries) {
-      await apiObj.loadRootJSONGeometry(entry.path, entry.key);
+      await loadGeometryWithFallback(
+        (path, key) => apiObj.loadRootJSONGeometry(path, key),
+        entry,
+      );
     }
     await forceDoubleSidedForNamedGeometry(apiObj, "emc");
     applyDetectorOpacityFromUi(apiObj);

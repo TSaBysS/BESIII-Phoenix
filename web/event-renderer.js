@@ -58,7 +58,7 @@ export function estimateEmcRadius(scene, THREE) {
 
 /**
  * Build or rebuild the event overlay group in the Three.js scene.
- * @returns {number} count of drawable objects added
+ * @returns {Promise<{group:any,count:number,eventTime:{minNs:number,maxNs:number,source:string}}>}
  */
 export async function buildCustomEventOverlay(
   eventDisplay,
@@ -68,7 +68,7 @@ export async function buildCustomEventOverlay(
 ) {
   const allKeys  = Object.keys(eventsData || {});
   const eventKey = allKeys.includes(selectedEventKey) ? selectedEventKey : allKeys[0];
-  if (!eventKey) return 0;
+  if (!eventKey) return { group: null, count: 0, eventTime: { minNs: 0, maxNs: 30, source: "empty" } };
 
   const ev        = eventsData[eventKey] || {};
   const trackStable = Array.isArray(ev?.Tracks?.["REC MdcTrack (stable)"]) ? ev.Tracks["REC MdcTrack (stable)"] : [];
@@ -84,14 +84,29 @@ export async function buildCustomEventOverlay(
 
   const clusters   = ev?.CaloClusters ? Object.values(ev.CaloClusters).flat() : [];
   const eventTime  = estimateEventTimeRange(ev, tracks, mdcHits, emcHits, tofHits, mucHits);
-  const emcTimeValues = emcHits.map((h) => Number(h?.time)).filter((v) => Number.isFinite(v) && v >= 0);
-  const emcTimeMin = emcTimeValues.length ? Math.min(...emcTimeValues) : NaN;
-  const emcTimeMax = emcTimeValues.length ? Math.max(...emcTimeValues) : NaN;
+  let maxTrackDtNs = 0;
+  for (const t of tracks) {
+    const points = Array.isArray(t?.pos) ? t.pos : [];
+    if (points.length < 2) continue;
+    let lengthMm = 0;
+    for (let i = 1; i < points.length; i += 1) {
+      const dx = Number(points[i][0]) - Number(points[i - 1][0]);
+      const dy = Number(points[i][1]) - Number(points[i - 1][1]);
+      const dz = Number(points[i][2]) - Number(points[i - 1][2]);
+      lengthMm += Math.hypot(dx, dy, dz);
+    }
+    const pGeV = Number(t?.pt_debug?.p_est ?? 0.6);
+    const beta = pGeV > 0 ? pGeV / Math.sqrt(pGeV * pGeV + 0.13957 * 0.13957) : 0.9;
+    const dtNs = lengthMm / Math.max(1e-6, beta * C_MM_PER_NS);
+    if (Number.isFinite(dtNs)) maxTrackDtNs = Math.max(maxTrackDtNs, dtNs);
+  }
+  const mainPhaseEndNs = Math.max(eventTime.maxNs, eventTime.minNs + maxTrackDtNs);
+  const postMainStartNs = mainPhaseEndNs + 0.5;
 
   const tm    = eventDisplay?.getThreeManager?.();
   const sm    = tm?.getSceneManager?.();
   const scene = sm?.getScene?.();
-  if (!scene) return 0;
+  if (!scene) return { group: null, count: 0, eventTime: { ...eventTime } };
 
   const THREE = await getThree();
 
@@ -184,13 +199,6 @@ export async function buildCustomEventOverlay(
     // Layered radial glow: 3 concentric translucent spheres, innermost brightest.
     const baseR   = 3.5 + 22.0 * Math.pow(tcol, 0.6);
     const nLayers = 3;
-    const clusterTimeRaw = Number(c?.time);
-    const showerStartNs  = Number.isFinite(clusterTimeRaw) && clusterTimeRaw >= 0
-      ? clusterTimeRaw
-      : (Number.isFinite(emcTimeMin) && Number.isFinite(emcTimeMax)
-        ? (emcTimeMin + 0.55 * (emcTimeMax - emcTimeMin))
-        : (eventTime.minNs + 0.45 * (eventTime.maxNs - eventTime.minNs)));
-
     for (let li = 0; li < nLayers; li += 1) {
       const layerFrac = (li + 1) / nLayers;          // 1/3, 2/3, 1
       const r_i  = baseR * layerFrac;
@@ -203,7 +211,7 @@ export async function buildCustomEventOverlay(
       const sphere = new THREE.Mesh(geo, mat);
       sphere.position.set(x, y, z);
       sphere.renderOrder = 1200 - li;
-      sphere.userData = { kind: "emc_shower", timeStartNs: showerStartNs, ...c };
+      sphere.userData = { kind: "emc_shower", timeStartNs: postMainStartNs, ...c };
       group.add(sphere);
     }
     count += 1;
@@ -268,8 +276,11 @@ export async function buildCustomEventOverlay(
       crystal.position.set(x, y, z);
       if (part === 1) crystal.lookAt(new THREE.Vector3(0, 0, z));
       crystal.renderOrder = 1000;
-      const th = Number(h?.time);
-      crystal.userData = { kind: "emc_hit_crystal_overlay", timeStartNs: Number.isFinite(th) ? th : eventTime.minNs, ...h };
+      crystal.userData = {
+        kind: "emc_hit_crystal_overlay",
+        timeStartNs: postMainStartNs,
+        ...h,
+      };
       group.add(crystal);
       count += 1;
     }
@@ -310,7 +321,7 @@ export async function buildCustomEventOverlay(
     const core = new THREE.Line(coreGeo, coreMat);
     core.renderOrder = 1000;
     const tdc = Number(h?.tdc);
-    core.userData = { kind: "mdc_hit_fire", timeStartNs: Number.isFinite(tdc) ? tdc : eventTime.minNs, ...h };
+    core.userData = { kind: "mdc_hit_fire", timeStartNs: Number.isFinite(tdc) ? tdc : eventTime.maxNs, ...h };
     group.add(core);
 
     if (isStereo) {
@@ -324,7 +335,7 @@ export async function buildCustomEventOverlay(
       cone.position.copy(p1).addScaledVector(dir.clone().normalize(), -coneLen * 0.5);
       cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
       cone.renderOrder = 1001;
-      cone.userData = { kind: "mdc_hit_cone", timeStartNs: Number.isFinite(tdc) ? tdc : eventTime.minNs, ...h };
+      cone.userData = { kind: "mdc_hit_cone", timeStartNs: Number.isFinite(tdc) ? tdc : eventTime.maxNs, ...h };
       group.add(cone);
     }
 
@@ -339,7 +350,7 @@ export async function buildCustomEventOverlay(
     const glow = new THREE.Mesh(glowGeo, glowMat);
     glow.position.copy(p1);
     glow.renderOrder = 999;
-    glow.userData = { kind: "mdc_hit_bubble", timeStartNs: Number.isFinite(tdc) ? tdc : eventTime.minNs, ...h };
+    glow.userData = { kind: "mdc_hit_bubble", timeStartNs: Number.isFinite(tdc) ? tdc : eventTime.maxNs, ...h };
     group.add(glow);
     count += 1;
   }
@@ -417,15 +428,17 @@ export async function buildCustomEventOverlay(
       slab.lookAt(new THREE.Vector3(0, 0, z));
     }
     slab.renderOrder = 992;
-    const mucTdc = Number(h?.timeChannel);
-    const mucT   = Number.isFinite(mucTdc) && mucTdc >= 0 ? mucTdc : (Number(h?.depth) * 5.0);
-    slab.userData = { kind: "muc_hit_strip", timeStartNs: Number.isFinite(mucT) ? mucT : eventTime.minNs, ...h };
+    slab.userData = { kind: "muc_hit_strip", timeStartNs: postMainStartNs, ...h };
     group.add(slab);
     count += 1;
   }
 
   scene.add(group);
-  return { group, count, eventTime, emcTimeMin, emcTimeMax };
+  return {
+    group,
+    count,
+    eventTime: { ...eventTime, maxNs: Math.max(eventTime.maxNs, postMainStartNs) },
+  };
 }
 
 // ── MDC geometry transform helpers (kept for coordinate debugging) ────────────

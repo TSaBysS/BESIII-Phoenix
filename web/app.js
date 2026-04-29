@@ -72,72 +72,6 @@ let importInProgress     = false;
 
 // ── loader progress ───────────────────────────────────────────────────────────
 
-async function recolorEmcEndcaps(eventDisplay) {
-  if (!eventDisplay) return;
-  try {
-    const THREE = await import("three");
-    const tm = eventDisplay?.getThreeManager?.();
-    const sm = tm?.getSceneManager?.();
-    const geometries = sm?.getGeometries?.() || sm?.getScene?.();
-    if (!geometries) return;
-
-    const emcRoots = [];
-    const emcExact = geometries.getObjectByName?.("emc");
-    if (emcExact) emcRoots.push(emcExact);
-    geometries.traverse?.((obj) => {
-      const n = String(obj?.name || "").toLowerCase();
-      if (!n || !n.includes("emc")) return;
-      if (!emcRoots.includes(obj)) emcRoots.push(obj);
-    });
-
-    if (!emcRoots.length) return;
-    const emcMeshes = [];
-    const endcapMeshes = [];
-    emcRoots.forEach((root) => {
-      root.traverse((obj) => {
-        if (obj?.isMesh) emcMeshes.push(obj);
-      });
-    });
-    if (!emcMeshes.length) return;
-
-    const emcBox = new THREE.Box3();
-    emcRoots.forEach((root) => {
-      const b = new THREE.Box3().setFromObject(root);
-      if (!b.isEmpty()) emcBox.union(b);
-    });
-    const zMax = Math.max(Math.abs(emcBox.min.z), Math.abs(emcBox.max.z));
-    const endcapZCut = zMax * 0.55;
-
-    const tmpBox = new THREE.Box3();
-    const c = new THREE.Vector3();
-    emcMeshes.forEach((mesh) => {
-      tmpBox.setFromObject(mesh);
-      if (tmpBox.isEmpty()) return;
-      tmpBox.getCenter(c);
-      if (Math.abs(c.z) >= endcapZCut) {
-        endcapMeshes.push(mesh);
-      }
-    });
-    if (!endcapMeshes.length) return;
-
-    for (const mesh of endcapMeshes) {
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      mats.forEach((mat) => {
-        if (!mat) return;
-        // Make only endcaps obviously visible for quick checks.
-        if (mat.color?.setHex) mat.color.setHex(0xff00ff);
-        if (mat.emissive?.setHex) mat.emissive.setHex(0x330033);
-        mat.transparent = false;
-        mat.opacity = 1.0;
-        mat.depthWrite = true;
-        mat.needsUpdate = true;
-      });
-    }
-  } catch (err) {
-    console.warn("EMC endcap recolor skipped:", err);
-  }
-}
-
 function setLoaderProgress(v) {
   loaderProgressValue = Math.max(0, Math.min(100, Number(v) || 0));
   if (loaderProgressBarEl) loaderProgressBarEl.style.width = `${loaderProgressValue}%`;
@@ -425,7 +359,6 @@ function setupImportUi() {
 
 async function doLoadPhoenix() {
   currentEventDisplay = await loadPhoenix(viewerEl);
-  await recolorEmcEndcaps(currentEventDisplay);
   scheduleBindTrackInteractions();
   setStatus("探测器几何已加载，等待导入事例", "ok");
   setImportStatus("几何就绪，可以导入事例 JSON ↑");

@@ -9,7 +9,7 @@
 ```
 BESIII_PhoenixCheck/
 ├── scripts/                  # 数据准备脚本
-│   ├── bes3_visualize.sh     # 总控脚本（几何准备 / 事例转换 / 启动服务）
+│   ├── bes3_visualize.sh     # 总控脚本（几何准备 / 事例转换）
 │   ├── prepare_geometry.py   # GDML 几何预处理（近似化 + MDC 视图拆分）
 │   ├── export_geometry.C     # ROOT 宏：GDML → ROOT JSON；MUC strip map 导出
 │   ├── prepare_events.py     # REC 文件 → Phoenix 事例 JSON 转换
@@ -49,7 +49,7 @@ bash scripts/bes3_visualize.sh prepare
 2. 导出 TOF、MUC、CGEM 几何
 3. 导出 MUC strip 位置图（用于 hit 定位）
 4. 近似化 MDC 几何（twistedtubs → tube）并拆分内外室视图
-5. 近似化 EMC 几何（irregBox → box）
+5. 近似化 EMC 几何（`emc_approx.root.json`，irregBox → box）
 
 **依赖**：ROOT（含 TGeoManager）、Python 3
 
@@ -87,32 +87,15 @@ python3 scripts/prepare_events.py --help
 ### 3. 启动本地 Web 服务
 
 ```bash
-bash scripts/bes3_visualize.sh serve
-# 或指定端口
-bash scripts/bes3_visualize.sh serve 8080
+cd BESIII_PhoenixCheck
+python3 -m http.server 8010
 ```
 
 然后在浏览器打开：`http://127.0.0.1:8010/web/`
 
 ---
 
-### 4. 切换探测器视图（可选）
-
-默认显示完整拼装几何（assembled_besiii）。切换到单个子探测器：
-
-```bash
-bash scripts/bes3_visualize.sh view mdc
-bash scripts/bes3_visualize.sh view emc
-bash scripts/bes3_visualize.sh view tof
-bash scripts/bes3_visualize.sh view muc
-bash scripts/bes3_visualize.sh view cgem
-bash scripts/bes3_visualize.sh view assembled_besiii   # 恢复默认
-bash scripts/bes3_visualize.sh list                    # 列出所有视图
-```
-
----
-
-### 5. 导入事例数据（网页端）
+### 4. 导入事例数据（网页端）
 
 启动后网页初始化时**不会自动加载事例**，探测器几何加载完成后：
 
@@ -124,7 +107,7 @@ bash scripts/bes3_visualize.sh list                    # 列出所有视图
 
 ---
 
-### 6. 打包离线版本
+### 5. 打包离线版本
 
 ```bash
 bash scripts/package_offline.sh
