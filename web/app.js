@@ -64,18 +64,31 @@ const urlParams = new URLSearchParams(window.location.search);
 const selectedEventKeyFromQuery = urlParams.get("evt") || "";
 const showMcFromQuery         = urlParams.get("mc") === "1";
 const showTruthFromQuery      = urlParams.get("truth") === "1" || showMcFromQuery;
+const showEmcCandidateBoxes   = urlParams.get("emcboxes") !== "0";
 
 let currentEventDisplay  = null;
 let cachedEventsData     = null;
 let currentOverlayGroup  = null;
 let loaderProgressValue  = 10;
 let importInProgress     = false;
+let emcDebugHelpers      = [];
 
 // ── loader progress ───────────────────────────────────────────────────────────
 
 function setDebugPanelText(text) {
   if (!debugPanelTextEl) return;
   debugPanelTextEl.textContent = String(text || "");
+}
+
+function clearEmcDebugHelpers() {
+  if (!emcDebugHelpers.length) return;
+  emcDebugHelpers.forEach((obj) => {
+    obj?.parent?.remove?.(obj);
+    if (obj?.geometry?.dispose) obj.geometry.dispose();
+    const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
+    mats.forEach((m) => m?.dispose?.());
+  });
+  emcDebugHelpers = [];
 }
 
 async function updateEmcDebugPanel(eventDisplay) {
@@ -107,6 +120,7 @@ async function updateEmcDebugPanel(eventDisplay) {
     const endcapNameRegex = /(endcap|ecap|east|west|cap)/i;
     const emcNameMatches = new Set();
     const emcMeshes = [];
+    const endcapMeshes = [];
     emcRoots.forEach((root) => {
       root.traverse((obj) => {
         if (obj?.isMesh) emcMeshes.push(obj);
@@ -130,9 +144,26 @@ async function updateEmcDebugPanel(eventDisplay) {
       tmpBox.setFromObject(mesh);
       if (tmpBox.isEmpty()) return;
       tmpBox.getCenter(c);
-      if (Math.abs(c.z) >= endcapZCut) endcapCandidateMeshes += 1;
+      if (Math.abs(c.z) >= endcapZCut) {
+        endcapCandidateMeshes += 1;
+        endcapMeshes.push(mesh);
+      }
       else barrelCandidateMeshes += 1;
     });
+
+    clearEmcDebugHelpers();
+    if (showEmcCandidateBoxes) {
+      const scene = sm?.getScene?.() || geometries;
+      for (const mesh of endcapMeshes) {
+        const box = new THREE.Box3().setFromObject(mesh);
+        if (box.isEmpty()) continue;
+        const helper = new THREE.Box3Helper(box, 0xff4444);
+        helper.renderOrder = 999;
+        helper.userData.__bes3EmcDebug = true;
+        scene?.add?.(helper);
+        emcDebugHelpers.push(helper);
+      }
+    }
 
     const lines = [
       `EMC debug @ ${new Date().toLocaleTimeString()}`,
@@ -142,6 +173,7 @@ async function updateEmcDebugPanel(eventDisplay) {
       `Heuristic cut |z| >= ${endcapZCut.toFixed(1)}`,
       `Endcap candidate meshes: ${endcapCandidateMeshes}`,
       `Barrel candidate meshes: ${barrelCandidateMeshes}`,
+      `Candidate boxes: ${showEmcCandidateBoxes ? "ON (red)" : "OFF"} (?emcboxes=0 to disable)`,
       `Name matches (endcap/east/west/cap): ${emcNameMatches.size}`,
       emcNameMatches.size
         ? `Samples: ${Array.from(emcNameMatches).slice(0, 8).join(", ")}`
