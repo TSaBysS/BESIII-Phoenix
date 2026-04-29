@@ -1,0 +1,11 @@
+# MC truth demo events from KS.rec — lines: runId eventId (MC run is negative in REC)
+-9947 2
+-9947 6
+-9947 9
+-9947 12
+-9947 19
+-9947 20
+-9947 27
+-9947 28
+-9947 29
+-9947 31

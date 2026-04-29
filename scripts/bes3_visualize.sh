@@ -75,13 +75,58 @@ PREPARE_EVENT() {
   echo "[event] Wrote: ${out_json}"
 }
 
+# Default REC pools for the bundled demo mixed JSON (override with env).
+KNUNUBAR_REC_DIR="${KNUNUBAR_REC_DIR:-/afs/ihep.ac.cn/users/y/yanjiazhen/nphy/Knunubar/rawData/outputs}"
+KS_REC_MC="${KS_REC_MC:-/afs/ihep.ac.cn/users/y/yanjiazhen/nphy/Jpsi2PhiEtap/SignalMC/KSSLDecay/rec/KS.rec}"
+KS_MC_PAIRS="${KS_MC_PAIRS:-${BASE_DIR}/data/events/ks_mc_pairs.txt}"
+MERGE_PY="${BASE_DIR}/scripts/merge_phoenix_events.py"
+
+PREPARE_MIXED() {
+  local out_json="${BASE_DIR}/data/events/event.mixed.json"
+  mkdir -p "${BASE_DIR}/data/events"
+  local tmp_knu tmp_ks
+  tmp_knu="$(mktemp)"
+  tmp_ks="$(mktemp)"
+  trap 'rm -f "${tmp_knu}" "${tmp_ks}"' RETURN
+
+  if [[ ! -d "${KNUNUBAR_REC_DIR}" ]]; then
+    echo "[mixed] ERROR: directory not found: ${KNUNUBAR_REC_DIR}" >&2
+    return 1
+  fi
+  if [[ ! -f "${KS_REC_MC}" ]]; then
+    echo "[mixed] ERROR: KS.rec not found: ${KS_REC_MC}" >&2
+    return 1
+  fi
+  if [[ ! -f "${KS_MC_PAIRS}" ]]; then
+    echo "[mixed] ERROR: pair list not found: ${KS_MC_PAIRS}" >&2
+    return 1
+  fi
+
+  echo "[mixed] REC batch from: ${KNUNUBAR_REC_DIR}"
+  python3 "${REC2PHX}" --rec-dir "${KNUNUBAR_REC_DIR}" "${tmp_knu}"
+
+  echo "[mixed] MC subset from: ${KS_REC_MC} (--select ${KS_MC_PAIRS})"
+  python3 "${REC2PHX}" "${KS_REC_MC}" "${tmp_ks}" --select "${KS_MC_PAIRS}"
+
+  echo "[mixed] Merge -> ${out_json}"
+  python3 "${MERGE_PY}" "${tmp_knu}" "${tmp_ks}" "${out_json}"
+  echo "[mixed] Done."
+}
+
 cmd="${1:-help}"
 case "${cmd}" in
   prepare) PREPARE ;;
   prepare-event) shift; PREPARE_EVENT "$@" ;;
+  prepare-mixed) PREPARE_MIXED ;;
   *)
     echo "Usage:"
     echo "  bash scripts/bes3_visualize.sh prepare"
     echo "  bash scripts/bes3_visualize.sh prepare-event [rec-file|rec-dir]"
+    echo "  bash scripts/bes3_visualize.sh prepare-mixed"
+    echo ""
+    echo "Env for prepare-mixed:"
+    echo "  KNUNUBAR_REC_DIR  (default: Knunubar rawData/outputs)"
+    echo "  KS_REC_MC         (default: Jpsi2PhiEtap/.../KS.rec)"
+    echo "  KS_MC_PAIRS       (default: data/events/ks_mc_pairs.txt)"
     ;;
 esac

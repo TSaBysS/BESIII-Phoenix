@@ -47,6 +47,11 @@ const eventImportStatusEl = document.getElementById("eventImportStatus");
 const btnImportEventEl    = document.getElementById("btnImportEvent");
 const btnClearEventEl     = document.getElementById("btnClearEvent");
 const dropOverlayEl       = document.getElementById("dropOverlay");
+const btnEventPrevEl      = document.getElementById("btnEventPrev");
+const btnEventNextEl      = document.getElementById("btnEventNext");
+const searchRunEl         = document.getElementById("searchRun");
+const searchRecEl         = document.getElementById("searchRec");
+const btnEventJumpEl      = document.getElementById("btnEventJump");
 
 // ── runtime state ─────────────────────────────────────────────────────────────
 
@@ -54,6 +59,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const selectedEventKeyFromQuery = urlParams.get("evt") || "";
 const showMcFromQuery         = urlParams.get("mc") === "1";
 const showTruthFromQuery      = urlParams.get("truth") === "1" || showMcFromQuery;
+const skipDefaultEventFromQuery = urlParams.get("noDefault") === "1";
 
 let currentEventDisplay  = null;
 let cachedEventsData     = null;
@@ -143,6 +149,12 @@ function setupFixedUi() {
 
 // ── event selector UI ─────────────────────────────────────────────────────────
 
+/** Display run as positive for MC (stored run may be negative). */
+function displayRun(ev) {
+  const r = Number(ev?.runNumber ?? -1);
+  return Number.isFinite(r) ? Math.abs(r) : r;
+}
+
 function setupEventUi(eventsData) {
   const keys = Object.keys(eventsData || {});
   if (!eventSelectEl) return keys[0] || "";
@@ -151,13 +163,97 @@ function setupEventUi(eventsData) {
     const ev = eventsData[k] || {};
     const op = document.createElement("option");
     op.value = k;
-    op.textContent = `${idx + 1}. run ${Number(ev?.runNumber ?? -1)} evt ${Number(ev?.eventNumber ?? -1)} (${ev?.recFile || "rec"})`;
+    op.textContent = `${idx + 1}. run ${displayRun(ev)} evt ${Number(ev?.eventNumber ?? -1)} (${ev?.recFile || "rec"})`;
     eventSelectEl.appendChild(op);
   });
   const selected = keys.includes(selectedEventKeyFromQuery) ? selectedEventKeyFromQuery : (keys[0] || "");
   if (selected) eventSelectEl.value = selected;
   eventSelectEl.onchange = () => renderSelectedEventOverlay();
+  updateEventNavButtons();
   return selected;
+}
+
+function getOrderedEventKeys() {
+  if (!eventSelectEl) return [];
+  return Array.from(eventSelectEl.options).map((o) => o.value).filter(Boolean);
+}
+
+function updateEventNavButtons() {
+  const keys = getOrderedEventKeys();
+  const n = keys.length;
+  const dis = n < 2;
+  if (btnEventPrevEl) btnEventPrevEl.disabled = dis;
+  if (btnEventNextEl) btnEventNextEl.disabled = dis;
+}
+
+/** Match events: run compares abs(); rec matches substring on recFile or full key. */
+function findMatchingEventKeys(eventsData, runStr, recStr) {
+  const keys = Object.keys(eventsData || {});
+  let runAbs = null;
+  const rs = runStr != null ? String(runStr).trim() : "";
+  if (rs) {
+    const n = parseInt(rs, 10);
+    if (Number.isFinite(n)) runAbs = Math.abs(n);
+  }
+  const recSub = recStr != null ? String(recStr).trim().toLowerCase() : "";
+
+  return keys.filter((k) => {
+    const ev = eventsData[k];
+    const rn = Number(ev?.runNumber ?? NaN);
+    if (runAbs !== null && (!Number.isFinite(rn) || Math.abs(rn) !== runAbs)) return false;
+    if (recSub) {
+      const rf = String(ev?.recFile ?? "").toLowerCase();
+      if (!rf.includes(recSub) && !k.toLowerCase().includes(recSub)) return false;
+    }
+    return true;
+  });
+}
+
+async function selectAdjacentEvent(delta) {
+  const keys = getOrderedEventKeys();
+  if (keys.length < 2 || !eventSelectEl) return;
+  let idx = keys.indexOf(eventSelectEl.value);
+  if (idx < 0) idx = 0;
+  idx = (idx + delta + keys.length) % keys.length;
+  eventSelectEl.value = keys[idx];
+  await renderSelectedEventOverlay();
+}
+
+async function jumpToSearch() {
+  if (!cachedEventsData) return;
+  const runStr = searchRunEl?.value ?? "";
+  const recStr = searchRecEl?.value ?? "";
+  if (!String(runStr).trim() && !String(recStr).trim()) {
+    setImportStatus("请填写 run 或 rec 片段", "#ffcc66");
+    return;
+  }
+  const matches = findMatchingEventKeys(cachedEventsData, runStr, recStr);
+  if (matches.length === 0) {
+    setImportStatus("未找到匹配事例", "#ff8888");
+    return;
+  }
+  const key = matches[0];
+  if (eventSelectEl) eventSelectEl.value = key;
+  setImportStatus(matches.length > 1
+    ? `找到 ${matches.length} 个，显示第 1 个`
+    : "已跳转", "#72e072");
+  await renderSelectedEventOverlay();
+}
+
+function setupEventNavigationUi() {
+  if (btnEventPrevEl) btnEventPrevEl.addEventListener("click", () => selectAdjacentEvent(-1));
+  if (btnEventNextEl) btnEventNextEl.addEventListener("click", () => selectAdjacentEvent(1));
+  if (btnEventJumpEl) btnEventJumpEl.addEventListener("click", () => jumpToSearch());
+  if (searchRunEl) {
+    searchRunEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") jumpToSearch();
+    });
+  }
+  if (searchRecEl) {
+    searchRecEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") jumpToSearch();
+    });
+  }
 }
 
 function setupMcTruthUi(ev) {
@@ -210,6 +306,7 @@ async function applyEventData(data, filename) {
 
   if (eventSelectEl) eventSelectEl.style.display = "block";
   if (btnClearEventEl) btnClearEventEl.style.display = "block";
+  updateEventNavButtons();
   setImportStatus(`已加载: ${filename || "event.json"}`, "#72e072");
 
   const result = await buildCustomEventOverlay(
@@ -246,6 +343,7 @@ function clearEventData() {
   currentOverlayGroup = null;
   clearTrackCandidateCache();
   if (eventSelectEl)    { eventSelectEl.innerHTML = ""; eventSelectEl.style.display = "none"; }
+  updateEventNavButtons();
   if (btnClearEventEl)  btnClearEventEl.style.display = "none";
   if (mcTruthWrapEl)    mcTruthWrapEl.style.display  = "none";
   if (btnTruthModeEl)   btnTruthModeEl.style.display  = "none";
@@ -315,6 +413,27 @@ async function doLoadPhoenix() {
   setImportStatus("几何就绪，可以导入事例 JSON ↑");
 }
 
+async function tryLoadDefaultEventJson() {
+  if (!currentEventDisplay) return;
+  if (skipDefaultEventFromQuery || window.BES3_SKIP_DEFAULT_EVENT === true) return;
+  const url = window.BES3_DEFAULT_EVENT_URL;
+  if (!url || typeof url !== "string") return;
+  setImportStatus("正在加载内置演示事例…", "#9fc2ff");
+  try {
+    const resp = await fetch(url, { cache: "no-store" });
+    if (!resp.ok) {
+      setImportStatus(`内置事例不可用 (${resp.status})，请手动导入`, "#ffcc66");
+      return;
+    }
+    const data = await resp.json();
+    const label = url.split("/").pop() || "event.json";
+    await applyEventData(data, `${label} (内置)`);
+  } catch (err) {
+    console.warn("Default event JSON failed:", err);
+    setImportStatus(`内置事例加载失败: ${err.message || err}`, "#ffcc66");
+  }
+}
+
 // ── PID interaction init ──────────────────────────────────────────────────────
 
 function initPidModule() {
@@ -336,10 +455,12 @@ async function boot() {
   startLoaderProgressPulse();
   setupFixedUi();
   setupImportUi();
+  setupEventNavigationUi();
   initPidModule();
 
   try {
     await doLoadPhoenix();
+    await tryLoadDefaultEventJson();
   } catch (phoenixErr) {
     const reason = phoenixErr?.message || phoenixLastError || "unknown reason";
     console.warn("Phoenix loading failed, switch to JSROOT geometry:", reason);

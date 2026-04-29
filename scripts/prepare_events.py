@@ -106,6 +106,27 @@ def _unit_vec(x, y, z):
     return [x / n, y / n, z / n]
 
 
+def _mother_is_charged_pion_or_kaon(mother_pdg):
+    """True if direct mother is pi+- (211) or K+- (321); used to skip their decay daughters in MC truth lines."""
+    if mother_pdg is None:
+        return False
+    try:
+        a = abs(int(mother_pdg))
+    except (TypeError, ValueError):
+        return False
+    return a == 211 or a == 321
+
+
+def _mother_is_muon(mother_pdg):
+    """True if direct mother is mu+- (13); skip mu decay charged daughters (e.g. Michel e+-)."""
+    if mother_pdg is None:
+        return False
+    try:
+        return abs(int(mother_pdg)) == 13
+    except (TypeError, ValueError):
+        return False
+
+
 def _build_mc_truth_polyline(mp, mdc_rmax_mm=810.0, mdc_zmax_mm=1450.0):
     pdg = int(_as_float(_mc_member(mp, ["m_particleID", "m_particleProperty", "m_pdgCode"], 0), 0))
     if abs(pdg) not in MC_TRUTH_CHARGED_PID:
@@ -1412,12 +1433,14 @@ def convert_rec_to_event(rec_path, entry_idx=0):
     for mc_branch in ("TMcEvent/m_mcParticleCol", "TMcEvent/m_mcParticleCol#"):
         try:
             mc_col = _entry_array(tree, mc_branch, entry_idx)
+            # Pass 1: full tid -> pdg map so mother's PDG is known when filtering daughters.
             for mp in mc_col:
                 tid = int(_as_float(_mc_member(mp, ["m_trackIndex"], -1), -1))
                 pdg = int(_as_float(_mc_member(mp, ["m_particleID", "m_particleProperty", "m_pdgCode"], 0), 0))
                 mother = int(_as_float(_mc_member(mp, ["m_mother"], -1), -1))
                 if tid >= 0:
                     mc_meta_by_tid[tid] = {"pdg": pdg, "mother": mother}
+            for mp in mc_col:
                 track = _build_mc_truth_polyline(mp)
                 if track is None:
                     ph = _build_mc_truth_photon_cluster(mp)
@@ -1426,6 +1449,12 @@ def convert_rec_to_event(rec_path, entry_idx=0):
                 else:
                     # Skip beam electrons from generator entrance.
                     if abs(track["pdg"]) == 11 and track["mother"] < 0:
+                        continue
+                    mother_idx = int(track.get("mother", -1))
+                    mother_pdg = mc_meta_by_tid.get(mother_idx, {}).get("pdg")
+                    if _mother_is_charged_pion_or_kaon(mother_pdg):
+                        continue
+                    if _mother_is_muon(mother_pdg):
                         continue
                     mc_tracks.append(track)
             break

@@ -1,5 +1,7 @@
 # BESIII PhoenixCheck — 项目技术说明
 
+本仓库提供：**BOSS GDML → Phoenix 几何**、**REC/MC ROOT → Phoenix 事例 JSON**、以及 **浏览器内事件叠加（径迹 / 击中 / shower / PID / MC truth）** 的一整套工具链。
+
 ## 目录
 
 1. [各子探测器几何组件](#1-各子探测器几何组件)
@@ -120,19 +122,22 @@
 
 Truth track 来自 MC 模拟真实粒子信息（`TMcEvent/m_mcParticleCol`），仅在 MC 文件中存在。
 
-### 筛选条件
+### 筛选条件（`prepare_events.py`）
 
-- 只绘制**带电粒子**：PDG 码在 `{11, 13, 211, 321, 2212}`（e/μ/π/K/p）及其反粒子
-- 跳过初始束流电子（`|pdg| == 11` 且 `mother < 0`）
+- 只输出**带电粒子**螺旋线：PDG 在 `{11, 13, 211, 321, 2212}`（e/μ/π/K/p）及其反粒子。
+- **跳过束流电子**：`|pdg| == 11` 且 `mother < 0`。
+- **跳过带电 π/K 的直接衰变产物**：根据 `m_mother` 解析母粒子 PDG（先整表构建 `trackIndex → pdg`），若**直接母亲**为 **π±（211）或 K±（321）**，则不导出该条 MC truth 折线。
+- **跳过 μ 子衰变的带电产物**：若**直接母亲**为 **μ±（13）**（例如 Michel `e±`），则不导出。
+
+说明：MC 表中仍有大量次级粒子；上述过滤用于减少「起点不在顶点、又与 reco 无关」的示意螺旋线。未过滤的中性粒子、光子 truth 等仍按原逻辑处理。
 
 ### 轨迹推导
 
-从 MC 粒子的**初始动量**（`m_xInitialMomentum, m_yInitialMomentum, m_zInitialMomentum`，GeV/c 单位）和**初始位置**（`m_xInitialPosition, m_yInitialPosition, m_zInitialPosition`，cm）出发，在 **B = 1 T 均匀磁场**（沿 −z 方向）中做螺旋传播；同时用 `m_x/y/zFinalPosition` 作为终止参考（接近该点或开始远离时停止）：
+从 MC 粒子的**初始动量**（GeV/c）与**初始位置**（cm→脚本内乘 `LENGTH_SCALE` 转为 mm）出发，用**均匀磁场近似**做螺旋步进（步长 10 mm，最多约 3000 步）。代码中磁场因子写为 **`field = -1.0`（与 BesVis 里 `f_Magnetic` 取 Tesla 的方式不同）**，半径公式形式与 BesVis `BesEvent::ConstructMcTrack` 一致：`radius = (pt×1e9/kv_c×1e3)/|q·field|`（量级供可视化用，**非**精细轨道再现）。
 
-1. 计算螺旋半径：`r = pt (GeV/c) × 1000 / (0.3 × B[T])`（单位 mm）
-2. 计算螺旋圆心：`(xc, yc) = 初始位置 ± 半径 × 方向垂直分量`，符号由电荷决定
-3. 逐步积分（步长 10 mm），生成最多 3000 个点的折线
-4. 当点超出 MDC 外径（约 810 mm）或轴向范围（±1450 mm）时停止
+用 `m_x/y/zFinalPosition` 仅作**停止启发式**（接近末点或距离开始回升等），**不**用末点约束螺旋几何形状。
+
+浏览器端（`event-renderer.js`）对 **`mode === "mc"`** 的折线在绘制前再裁一段 **MDC 圆柱包络**（与脚本里跳出螺旋相同的半径/轴向阈值量级），避免腔外折线段与 TOF/MUC 击中混淆；JSON 中的 `pos` 仍为完整折线。
 
 生成的折线以**浅蓝色**（`0x90caf9`）显示，与红色 REC track 区分。
 
@@ -227,7 +232,7 @@ helix = [dr, φ₀, κ, dz, tanλ]
 
 PID 功能由 `web/pid-tools.js`（算法与格式化）和 `web/pid-interaction.js`（交互）共同完成，入口在 `web/app.js` 中初始化。
 
-### 8.1 参与 PID 的数据来源
+### 7.1 参与 PID 的数据来源
 
 - **主输入**：`TRecEvent/m_recMdcDedxCol` 转换后的 dE/dx 结果（`m_pid_prob[5]`、`chiE/chiMu/chiPi/chiK/chiP`）
 - **TOF 约束**：`TRecEvent/m_recTofTrackCol` 的 `beta/sigma`，用于不同粒子假设的 beta 一致性似然
@@ -235,14 +240,14 @@ PID 功能由 `web/pid-tools.js`（算法与格式化）和 `web/pid-interaction
 - **轨迹关联**：通过 `TEvtRecObject/m_evtRecTrackCol` 建立 `mdcTrackId ↔ kalTrackId ↔ dedx` 关联
 - **显示对象**：只对前端可拾取的重建 track（红色 stable track）提供 PID 面板
 
-### 8.2 前端选中流程（点击红色重建轨迹）
+### 7.2 前端选中流程（点击红色重建轨迹）
 
 1. `event-renderer.js` 在构建轨迹时将每条 track 写入 `trackCandidateCache`，并保存 `trackId/mode/pointCount` 等元数据。  
 2. `pid-interaction.js` 使用 Three.js raycasting 对 `trackCandidateCache` 做命中测试。  
 3. 命中后将轨迹标记为 `selectedTrackId`，同时刷新高亮样式（线宽/颜色/透明度变化），并调用 PID 面板渲染。  
 4. 未命中或退出 PID 模式时，清空选中态并隐藏 hover/panel。
 
-### 8.3 PID 概率计算与展示
+### 7.3 PID 概率计算与展示
 
 `pid-tools.js` 的核心逻辑：
 
@@ -258,7 +263,7 @@ PID 功能由 `web/pid-tools.js`（算法与格式化）和 `web/pid-interaction
 - 若概率缺失，则显示 chi 信息和“PID unavailable”
 - 数值统一做格式化（`formatPidValue`），避免科学计数法影响可读性
 
-### 8.4 MC 文件下的 truth match 显示
+### 7.4 MC 文件下的 truth match 显示
 
 当事件包含 MC truth 轨迹时，PID 面板额外显示“truth match”：
 
@@ -267,7 +272,7 @@ PID 功能由 `web/pid-tools.js`（算法与格式化）和 `web/pid-interaction
 - 显示内容：`pdg`、估算动量、匹配分数
 - 该匹配仅用于显示解释，不会反向修改 reco track 或 PID 概率
 
-### 8.5 当前约束与注意事项
+### 7.5 当前约束与注意事项
 
 - 当前 PID 面板面向 **重建轨迹**；MC truth 轨迹本身不做 PID 拟合
 - PID 融合 dE/dx + TOF + EMC 信息；若 TOF/EMC 缺失则主要退化为 dE/dx 主导。若 dE/dx 也缺失，前端仅能显示几何/运动学信息
@@ -280,22 +285,25 @@ PID 功能由 `web/pid-tools.js`（算法与格式化）和 `web/pid-interaction
 ```
 BESIII_PhoenixCheck/
 ├── scripts/
-│   ├── bes3_visualize.sh          # 统一入口：prepare/prepare-event
-│   ├── prepare_geometry.py        # 几何预处理（approximate + split-mdc）
-│   ├── export_geometry.C          # ROOT宏：GDML→ROOT JSON / MUC strip map
-│   ├── prepare_events.py          # REC→Phoenix事件JSON（含PID融合、MC truth）
-│   └── package_offline.sh         # 打包离线包
+│   ├── bes3_visualize.sh          # prepare / prepare-event / prepare-mixed
+│   ├── merge_phoenix_events.py   # 合并多个 Phoenix 事例 JSON（顶层字典合并）
+│   ├── prepare_geometry.py       # 几何预处理（approximate + split-mdc）
+│   ├── export_geometry.C         # ROOT 宏：GDML→ROOT JSON / MUC strip map
+│   ├── prepare_events.py         # REC→Phoenix 事例 JSON（PID、MC truth 过滤等）
+│   └── package_offline.sh        # 打包离线包
 ├── data/
-│   ├── views/                     # 各子探测器 .root.json 几何文件
-│   └── events/                    # 转换后的事件 JSON 文件
+│   ├── views/                    # 各子探测器 .root.json 几何文件
+│   └── events/                   # 事例 JSON；默认演示见 event.mixed.json
+│       └── ks_mc_pairs.txt       # prepare-mixed 中 KS.rec 的 (runId,eventId) 列表
 └── web/
-    ├── index.html                 # 主页面（含 BES3_SELECTED_VIEW 内联配置）
-    ├── app.js                     # 主入口，编排所有模块
-    ├── loader.js                  # Phoenix加载、几何初始化
-    ├── event-renderer.js          # Three.js事件绘制（tracks/hits/clusters）
-    ├── truth.js                   # MC truth匹配算法
-    ├── pid-tools.js               # PID概率解析和显示
-    ├── pid-interaction.js         # 鼠标拾取和PID面板交互
-    ├── assets/                    # 图标、logo
-    └── vendor/                    # 离线Three.js和Phoenix发行包
+    ├── index.html                # BES3_GEOMETRIES、BES3_DEFAULT_EVENT_URL 等
+    ├── app.js                    # 几何加载、默认事例 fetch、事例导航/搜索
+    ├── loader.js                 # Phoenix 加载、透明度、相机
+    ├── event-renderer.js         # Track/Hit/Shower；MC truth MDC 裁剪显示
+    ├── truth.js                  # MC truth 几何匹配
+    ├── pid-tools.js / pid-interaction.js
+    ├── assets/ / vendor/
+    └── ...
 ```
+
+**`prepare-mixed`**（见 `bes3_visualize.sh`）：对 Knunubar 目录批量 `--rec-dir` 转换，再对 `KS.rec` 用 `--select ks_mc_pairs.txt` 抽取 MC 子集，`merge_phoenix_events.py` 合并为 `data/events/event.mixed.json`。环境变量 `KNUNUBAR_REC_DIR`、`KS_REC_MC`、`KS_MC_PAIRS` 可覆盖默认路径。
