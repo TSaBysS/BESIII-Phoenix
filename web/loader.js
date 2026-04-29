@@ -114,6 +114,29 @@ export function applyDetectorOpacityFromUi(eventDisplay) {
   });
 }
 
+async function forceDoubleSidedForNamedGeometry(eventDisplay, objectName) {
+  try {
+    const THREE = await import("three");
+    const tm = eventDisplay?.getThreeManager?.();
+    const sm = tm?.getSceneManager?.();
+    const geometries = sm?.getGeometries?.() || sm?.getScene?.();
+    if (!geometries) return;
+    const root = geometries.getObjectByName?.(objectName);
+    if (!root) return;
+    root.traverse((obj) => {
+      const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
+      mats.forEach((mat) => {
+        if (!mat) return;
+        if (!mat.userData.__bes3SideOriginal) mat.userData.__bes3SideOriginal = mat.side;
+        mat.side = THREE.DoubleSide;
+        mat.needsUpdate = true;
+      });
+    });
+  } catch (err) {
+    console.warn(`Force DoubleSide for ${objectName} skipped:`, err);
+  }
+}
+
 // ── camera ────────────────────────────────────────────────────────────────────
 
 export async function adjustPhoenixCamera(eventDisplay) {
@@ -246,6 +269,8 @@ export async function loadPhoenix(viewerEl) {
     for (const entry of entries) {
       await eventDisplay.loadRootJSONGeometry(entry.path, entry.key);
     }
+    // EMC endcaps can disappear when source normals are flipped; force double-sided.
+    await forceDoubleSidedForNamedGeometry(eventDisplay, "emc");
     applyDetectorOpacityFromUi(eventDisplay);
     await adjustPhoenixCamera(eventDisplay);
     return eventDisplay;
@@ -255,6 +280,7 @@ export async function loadPhoenix(viewerEl) {
     for (const entry of entries) {
       await apiObj.loadRootJSONGeometry(entry.path, entry.key);
     }
+    await forceDoubleSidedForNamedGeometry(apiObj, "emc");
     applyDetectorOpacityFromUi(apiObj);
     return apiObj;
   }
