@@ -40,14 +40,9 @@ function getSelectedView() {
 export function getGeometryEntries(view = getSelectedView()) {
   const gm = geometryMap();
 
-  // Preferred assembled mode: load one global full geometry to keep detector
-  // relative placements (especially endcaps) consistent with old behavior.
+  // Assembled mode: load sub-detectors and overlay them together.
+  // This is the intended BESIII assembled visualization mode.
   if (view === "assembled_besiii") {
-    const assembledPath = gm.assembled_besiii;
-    if (assembledPath && assembledPath !== "__assembled__") {
-      return [{ key: "full", path: assembledPath }];
-    }
-    // Legacy fallback: assembled by loading sub-detectors individually.
     return assembledComponents
       .map((c) => ({ key: c.key, path: gm[c.key] }))
       .filter((e) => Boolean(e.path));
