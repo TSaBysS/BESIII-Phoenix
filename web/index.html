@@ -140,6 +140,74 @@
         color: #d7e7ff;
       }
       #eventSelect { width: 100%; margin-top: 6px; }
+      .event-import-area {
+        margin-top: 10px;
+        border: 1.5px dashed rgba(100, 160, 255, 0.35);
+        border-radius: 8px;
+        padding: 10px 8px;
+        text-align: center;
+        color: #8db8f0;
+        font-size: 12px;
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s;
+        position: relative;
+      }
+      .event-import-area:hover,
+      .event-import-area.drag-over {
+        border-color: rgba(100, 160, 255, 0.85);
+        background: rgba(60, 100, 180, 0.15);
+        color: #b8d8ff;
+      }
+      .event-import-area input[type="file"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+        width: 100%;
+        height: 100%;
+      }
+      #btnClearEvent {
+        margin-top: 8px;
+        width: 100%;
+        padding: 4px 0;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 120, 120, 0.35);
+        background: rgba(180, 40, 40, 0.15);
+        color: #ffaaaa;
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 0.18s, border-color 0.18s;
+        display: none;
+      }
+      #btnClearEvent:hover {
+        background: rgba(200, 50, 50, 0.32);
+        border-color: rgba(255, 120, 120, 0.7);
+      }
+      #eventImportStatus {
+        margin-top: 6px;
+        font-size: 11px;
+        color: #8db8f0;
+        min-height: 14px;
+        word-break: break-all;
+      }
+      /* Full-page drag-over overlay */
+      #dropOverlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 55;
+        background: rgba(10, 30, 70, 0.72);
+        border: 3px dashed rgba(100, 160, 255, 0.7);
+        border-radius: 18px;
+        pointer-events: none;
+        align-items: center;
+        justify-content: center;
+        color: #a0c8ff;
+        font-size: 22px;
+        letter-spacing: 0.02em;
+        transition: opacity 0.15s;
+      }
+      #dropOverlay.active { display: flex; }
       #trackHoverTip {
         position: fixed;
         z-index: 40;
@@ -269,9 +337,16 @@
       <div class="opacity-row">EMC <input id="alphaEmc" type="range" min="0" max="1" step="0.05" value="0.10" /></div>
     </div>
     <div id="eventPanel">
-      <div><strong>Event Selector</strong></div>
-      <select id="eventSelect"></select>
+      <div><strong>Event</strong></div>
+      <select id="eventSelect" style="display:none;"></select>
+      <div class="event-import-area" id="eventImportArea" title="Click to select or drag &amp; drop a JSON event file">
+        <input type="file" id="eventFileInput" accept=".json,application/json" />
+        <div>&#8613; 拖拽或点击导入事例 JSON</div>
+      </div>
+      <div id="eventImportStatus"></div>
+      <button id="btnClearEvent">&#x2715; 清空事例</button>
     </div>
+    <div id="dropOverlay">&#8613; 松开以导入事例 JSON</div>
     <div id="timelinePanel">
       <button id="btnTimelinePlay" class="menu-btn" title="Play/Pause timeline">▶</button>
       <input id="timelineSlider" type="range" min="0" max="1000" step="1" value="0" />
@@ -284,8 +359,20 @@
     <div id="trackInfoPanel"></div>
     <div id="viewer"></div>
 
-    <script src="./geometries.js"></script>
-    <script src="./config.js"></script>
+    <script>
+      // Geometry file paths (written by `bes3_visualize.sh prepare` if overriding defaults).
+      window.BES3_GEOMETRIES = window.BES3_GEOMETRIES || {
+        assembled_besiii: "__assembled__",
+        mdc:  "../data/views/mdc_approx.root.json",
+        tof:  "../data/views/tof.root.json",
+        muc:  "../data/views/muc.root.json",
+        cgem: "../data/views/cgem.root.json",
+        emc:  "../data/views/emc_approx.root.json",
+      };
+      // View / debug settings (overridden by `bes3_visualize.sh view <det>`).
+      window.BES3_SELECTED_VIEW      = window.BES3_SELECTED_VIEW      ?? "assembled_besiii";
+      window.BES3_ENABLE_HELIX_DEBUG = window.BES3_ENABLE_HELIX_DEBUG ?? 0;
+    </script>
     <script type="importmap">
       {
         "imports": {
@@ -294,7 +381,7 @@
       }
     </script>
     <script type="module">
-      import(`./app.js?v=${Date.now()}`);
+      import(`./app.js?v=${Date.now()}`).catch((e) => console.error("app.js load failed:", e));
     </script>
   </body>
 </html>

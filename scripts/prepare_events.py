@@ -1448,8 +1448,26 @@ def convert_rec_to_event(rec_path, include_helix5=False, entry_idx=0):
     }
 
 
+def _load_selected_pairs(path):
+    """Load (runId, eventId) pairs from a text file (one per line, space or comma separated)."""
+    pairs = []
+    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.replace(",", " ").split()
+        if len(parts) < 2:
+            continue
+        pairs.append((int(parts[0]), int(parts[1])))
+    return pairs
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Convert BESIII REC to Phoenix event JSON.")
+    parser = argparse.ArgumentParser(
+        description="Convert BESIII REC to Phoenix event JSON.\n"
+                    "Supports single file, directory batch, and selected (runId,eventId) filter.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("rec_file", nargs="?", help="Input .rec ROOT file path")
     parser.add_argument("output_json", help="Output Phoenix events JSON path")
     parser.add_argument(
@@ -1458,13 +1476,49 @@ def main():
         help="Input directory containing multiple .rec files; convert all and merge events",
     )
     parser.add_argument(
+        "--select",
+        default=None,
+        metavar="PAIRS_TXT",
+        help="Text file with 'runId eventId' per line; only convert matching entries from rec_file",
+    )
+    parser.add_argument(
         "--with-helix5",
         action="store_true",
         help="Enable helix5 (blue track) computation for debugging only",
     )
     args = parser.parse_args()
 
-    if args.rec_dir:
+    # Mode 1: --select filter from a single multi-event rec file.
+    if args.select:
+        if not args.rec_file:
+            raise ValueError("rec_file is required with --select")
+        pairs = _load_selected_pairs(args.select)
+        if not pairs:
+            raise ValueError(f"No valid (runId,eventId) pairs in: {args.select}")
+        f       = uproot.open(args.rec_file)
+        tree    = f["Event"]
+        run_arr = tree["TEvtHeader/m_runId"].array(library="np")
+        evt_arr = tree["TEvtHeader/m_eventId"].array(library="np")
+        index_map = {}
+        for idx, (run_id, evt_id) in enumerate(zip(run_arr.tolist(), evt_arr.tolist())):
+            key = (int(run_id), int(evt_id))
+            if key not in index_map:
+                index_map[key] = idx
+        out, missing = {}, []
+        for key in pairs:
+            if key not in index_map:
+                missing.append(key)
+                continue
+            out.update(convert_rec_to_event(args.rec_file, include_helix5=args.with_helix5, entry_idx=index_map[key]))
+        if not out:
+            raise RuntimeError("No selected events converted. Check --select file and rec_file.")
+        if missing:
+            for run_id, evt_id in missing:
+                print(f"[warn] Missing pair run={run_id} event={evt_id}")
+        print(f"Converted events: {len(out)}")
+
+    # Mode 2: directory batch.
+    elif args.rec_dir:
         rec_files = sorted(Path(args.rec_dir).glob("*.rec"))
         if not rec_files:
             raise FileNotFoundError(f"No .rec files found in: {args.rec_dir}")
@@ -1476,10 +1530,13 @@ def main():
                 print(f"[warn] Skip {rp.name}: {e}")
         if not out:
             raise RuntimeError(f"No valid events converted from directory: {args.rec_dir}")
+
+    # Mode 3: single file, first entry.
     else:
         if not args.rec_file:
             raise ValueError("rec_file is required unless --rec-dir is provided")
         out = convert_rec_to_event(args.rec_file, include_helix5=args.with_helix5, entry_idx=0)
+
     out_path = Path(args.output_json)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
