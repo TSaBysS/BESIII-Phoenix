@@ -140,6 +140,22 @@
         color: #d7e7ff;
       }
       #eventSelect { width: 100%; margin-top: 6px; }
+      #btnImportEvent {
+        margin-top: 8px;
+        width: 100%;
+        padding: 6px 0;
+        border-radius: 6px;
+        border: 1px solid rgba(110, 170, 255, 0.55);
+        background: rgba(70, 120, 200, 0.2);
+        color: #cde2ff;
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 0.18s, border-color 0.18s;
+      }
+      #btnImportEvent:hover {
+        background: rgba(80, 140, 220, 0.35);
+        border-color: rgba(130, 190, 255, 0.9);
+      }
       .event-import-area {
         margin-top: 10px;
         border: 1.5px dashed rgba(100, 160, 255, 0.35);
@@ -334,10 +350,11 @@
       <div class="opacity-row">MDC <input id="alphaMdc" type="range" min="0" max="1" step="0.05" value="1.00" /></div>
       <div class="opacity-row">TOF <input id="alphaTof" type="range" min="0" max="1" step="0.05" value="1.00" /></div>
       <div class="opacity-row">MUC <input id="alphaMuc" type="range" min="0" max="1" step="0.05" value="1.00" /></div>
-      <div class="opacity-row">EMC <input id="alphaEmc" type="range" min="0" max="1" step="0.05" value="0.10" /></div>
+      <div class="opacity-row">EMC <input id="alphaEmc" type="range" min="0" max="1" step="0.05" value="0.30" /></div>
     </div>
     <div id="eventPanel">
       <div><strong>Event</strong></div>
+      <button id="btnImportEvent">+ 导入本地事例 JSON</button>
       <select id="eventSelect" style="display:none;"></select>
       <div class="event-import-area" id="eventImportArea" title="Click to select or drag &amp; drop a JSON event file">
         <input type="file" id="eventFileInput" accept=".json,application/json" />

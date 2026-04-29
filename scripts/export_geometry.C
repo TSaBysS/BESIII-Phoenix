@@ -153,3 +153,18 @@ void export_muc_strip_map(const char* inGdml, const char* outJson) {
   ofs.close();
   std::printf("Wrote %s with %zu strips\n", outJson, rows.size());
 }
+
+// Wrapper entry points so ROOT can call this file directly as:
+//   root -l -b -q 'scripts/export_geometry.C("in.gdml","out.json")'
+//   root -l -b -q 'scripts/export_geometry.C("Muc.gdml","muc_strip_map.json","muc_strip_map")'
+void export_geometry(const char* inGdml, const char* outJson) {
+  export_gdml_to_rootjson(inGdml, outJson);
+}
+
+void export_geometry(const char* inGdml, const char* outJson, const char* mode) {
+  if (mode && std::string(mode) == "muc_strip_map") {
+    export_muc_strip_map(inGdml, outJson);
+    return;
+  }
+  export_gdml_to_rootjson(inGdml, outJson);
+}

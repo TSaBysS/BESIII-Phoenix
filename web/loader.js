@@ -22,7 +22,7 @@
 // Sub-detector opacity defaults and UI slider bindings.
 // window.BES3_GEOMETRIES is written by index.html inline script.
 
-const DETECTOR_OPACITY_DEFAULTS = { mdc: 1.0, tof: 1.0, muc: 1.0, emc: 0.1 };
+const DETECTOR_OPACITY_DEFAULTS = { mdc: 1.0, tof: 1.0, muc: 1.0, emc: 0.3 };
 
 export const assembledComponents = [
   { key: "mdc", label: "MDC", get alphaEl() { return document.getElementById("alphaMdc"); }, defaultAlpha: DETECTOR_OPACITY_DEFAULTS.mdc },

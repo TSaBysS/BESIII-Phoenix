@@ -18,7 +18,7 @@ MDC_GDML="/afs/ihep.ac.cn/users/y/yanjiazhen/besfs5/boss-cgem/BOSS_Data/GdmlMana
 ROOT_EXPORT() {
   local in_gdml="$1"
   local out_json="$2"
-  root -l -b -q "${MACRO}+export_gdml_to_rootjson(\"${in_gdml}\",\"${out_json}\")"
+  root -l -b -q "${MACRO}(\"${in_gdml}\",\"${out_json}\")"
 }
 
 PREPARE() {
@@ -31,7 +31,7 @@ PREPARE() {
 
   echo "[3/7] Export MUC geometry + strip map..."
   ROOT_EXPORT "${MUC_GDML}" "${DATA_DIR}/muc.root.json"
-  root -l -b -q "${MACRO}+export_muc_strip_map(\"${MUC_GDML}\",\"${DATA_DIR}/muc_strip_map.json\")"
+  root -l -b -q "${MACRO}(\"${MUC_GDML}\",\"${DATA_DIR}/muc_strip_map.json\",\"muc_strip_map\")"
 
   echo "[4/7] Export CGEM geometry..."
   ROOT_EXPORT "${CGEM_GDML}" "${DATA_DIR}/cgem.root.json"

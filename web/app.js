@@ -54,6 +54,7 @@ const loaderProgressBarEl = document.getElementById("loaderProgressBar");
 const eventImportAreaEl   = document.getElementById("eventImportArea");
 const eventFileInputEl    = document.getElementById("eventFileInput");
 const eventImportStatusEl = document.getElementById("eventImportStatus");
+const btnImportEventEl    = document.getElementById("btnImportEvent");
 const btnClearEventEl     = document.getElementById("btnClearEvent");
 const dropOverlayEl       = document.getElementById("dropOverlay");
 
@@ -327,6 +328,9 @@ function clearEventData() {
 }
 
 function setupImportUi() {
+  if (btnImportEventEl && eventFileInputEl) {
+    btnImportEventEl.addEventListener("click", () => eventFileInputEl.click());
+  }
   if (eventFileInputEl) {
     eventFileInputEl.addEventListener("change", (e) => {
       const file = e.target.files?.[0];
