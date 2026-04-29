@@ -74,13 +74,29 @@ export function applyOpacityToNamedGeometry(eventDisplay, objectName, alpha = 0.
     if (!geometries) return;
     const root = geometries.getObjectByName?.(objectName);
     if (!root) return;
+    const a = Math.max(0, Math.min(1, Number(alpha)));
     root.traverse((obj) => {
       const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
       mats.forEach((mat) => {
         if (!mat) return;
-        mat.transparent = true;
-        mat.opacity = alpha;
-        mat.depthWrite = false;
+        // Cache original material flags once so opacity 1.0 can fully restore state.
+        if (!mat.userData.__bes3OpacityOriginal) {
+          mat.userData.__bes3OpacityOriginal = {
+            transparent: Boolean(mat.transparent),
+            opacity: Number.isFinite(Number(mat.opacity)) ? Number(mat.opacity) : 1,
+            depthWrite: Boolean(mat.depthWrite),
+          };
+        }
+        const orig = mat.userData.__bes3OpacityOriginal;
+        if (a >= 0.999) {
+          mat.transparent = orig.transparent;
+          mat.opacity = orig.opacity;
+          mat.depthWrite = orig.depthWrite;
+        } else {
+          mat.transparent = true;
+          mat.opacity = a;
+          mat.depthWrite = false;
+        }
         mat.needsUpdate = true;
       });
     });
