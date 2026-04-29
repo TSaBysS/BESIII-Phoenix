@@ -22,7 +22,6 @@ BESIII_PhoenixCheck/
 │   ├── event-renderer.js     # Track / Hit / Shower 绘制与样式
 │   ├── pid-interaction.js    # PID 鼠标交互（悬停提示、点选、信息面板）
 │   ├── pid-tools.js          # PID 概率计算工具函数
-│   ├── timeline.js           # 动画时间轴逻辑
 │   ├── truth.js              # MC truth 轨迹匹配与动量估计
 │   └── assets/               # 图标等静态资源
 │

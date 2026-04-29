@@ -6,7 +6,7 @@
  *   2. Event data loading and overlay building (event-renderer.js)
  *   3. PID pick interaction (pid-interaction.js)
  *   4. MC truth track toggle (truth.js)
- *   5. Animation timeline (timeline.js)
+ *   5. PID/Truth interaction controls
  */
 
 import {
@@ -17,10 +17,6 @@ import {
 import {
   buildCustomEventOverlay, trackCandidateCache, clearTrackCandidateCache,
 } from "./event-renderer.js";
-import {
-  timelineState, applyTimelineToOverlay,
-  ensureTimelineAnimation, setOverlayGroup,
-} from "./timeline.js";
 import {
   interactionState, init as initPid, scheduleBindTrackInteractions,
   bindTrackInteractionsIfNeeded, refreshTrackSelectionVisuals,
@@ -38,11 +34,6 @@ const mcTruthWrapEl       = document.getElementById("mcTruthWrap");
 const btnOpacityMenuEl    = document.getElementById("btnOpacityMenu");
 const btnResetCameraEl    = document.getElementById("btnResetCamera");
 const opacityPanelEl      = document.getElementById("opacityPanel");
-const btnTimelineMenuEl   = document.getElementById("btnTimelineMenu");
-const btnTimelinePlayEl   = document.getElementById("btnTimelinePlay");
-const timelineSliderEl    = document.getElementById("timelineSlider");
-const timelineTimeEl      = document.getElementById("timelineTime");
-const timelinePanelEl     = document.getElementById("timelinePanel");
 const btnPidModeEl        = document.getElementById("btnPidMode");
 const btnTruthModeEl      = document.getElementById("btnTruthMode");
 const trackHoverTipEl     = document.getElementById("trackHoverTip");
@@ -123,36 +114,6 @@ function setupFixedUi() {
     });
   });
 
-  if (btnTimelinePlayEl) {
-    btnTimelinePlayEl.onclick = () => {
-      timelineState.isPlaying = !timelineState.isPlaying;
-      btnTimelinePlayEl.textContent = timelineState.isPlaying ? "❚❚" : "▶";
-      if (timelineState.isPlaying) {
-        timelineState.lastTs = 0;
-        ensureTimelineAnimation(timelineSliderEl, timelineTimeEl);
-      }
-    };
-  }
-  if (timelineSliderEl) {
-    timelineSliderEl.addEventListener("input", () => {
-      const frac = Number(timelineSliderEl.value) / 1000;
-      timelineState.currentNs = timelineState.minNs + frac * (timelineState.maxNs - timelineState.minNs);
-      applyTimelineToOverlay(timelineSliderEl, timelineTimeEl);
-    });
-  }
-  if (btnTimelineMenuEl && timelinePanelEl) {
-    btnTimelineMenuEl.onclick = () => {
-      timelineState.enabled = !timelineState.enabled;
-      timelinePanelEl.classList.toggle("open", timelineState.enabled);
-      if (!timelineState.enabled) {
-        timelineState.isPlaying = false;
-        timelineState.lastTs    = 0;
-        if (btnTimelinePlayEl) btnTimelinePlayEl.textContent = "▶";
-      }
-      applyTimelineToOverlay(timelineSliderEl, timelineTimeEl);
-    };
-  }
-
   // PID mode button.
   if (btnPidModeEl) {
     btnPidModeEl.onclick = () => {
@@ -229,11 +190,6 @@ async function renderSelectedEventOverlay() {
   );
   if (result && result.group) {
     currentOverlayGroup = result.group;
-    setOverlayGroup(result.group);
-    timelineState.minNs     = result.eventTime.minNs;
-    timelineState.maxNs     = result.eventTime.maxNs;
-    timelineState.currentNs = timelineState.enabled ? result.eventTime.minNs : result.eventTime.maxNs;
-    applyTimelineToOverlay(timelineSliderEl, timelineTimeEl);
   }
   await bindTrackInteractionsIfNeeded();
 }
@@ -261,11 +217,6 @@ async function applyEventData(data, filename) {
   );
   if (result && result.group) {
     currentOverlayGroup = result.group;
-    setOverlayGroup(result.group);
-    timelineState.minNs     = result.eventTime.minNs;
-    timelineState.maxNs     = result.eventTime.maxNs;
-    timelineState.currentNs = timelineState.enabled ? result.eventTime.minNs : result.eventTime.maxNs;
-    applyTimelineToOverlay(timelineSliderEl, timelineTimeEl);
   }
   const count = result?.count ?? 0;
   setStatus(`事例已加载 (event=${selectedEventKey || "N/A"}, ${count} objects)`, count > 0 ? "ok" : "warn");

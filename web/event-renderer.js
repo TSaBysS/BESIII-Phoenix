@@ -15,8 +15,6 @@
  *   EMC crystal overlay: red   0xff2b2b
  */
 
-import { C_MM_PER_NS, estimateEventTimeRange } from "./timeline.js";
-
 export const EVENT_GLOBAL_R_SCALE = 0.1;
 
 let cachedThreeModule = null;
@@ -58,7 +56,7 @@ export function estimateEmcRadius(scene, THREE) {
 
 /**
  * Build or rebuild the event overlay group in the Three.js scene.
- * @returns {Promise<{group:any,count:number,eventTime:{minNs:number,maxNs:number,source:string}}>}
+ * @returns {Promise<{group:any,count:number}>}
  */
 export async function buildCustomEventOverlay(
   eventDisplay,
@@ -68,7 +66,7 @@ export async function buildCustomEventOverlay(
 ) {
   const allKeys  = Object.keys(eventsData || {});
   const eventKey = allKeys.includes(selectedEventKey) ? selectedEventKey : allKeys[0];
-  if (!eventKey) return { group: null, count: 0, eventTime: { minNs: 0, maxNs: 30, source: "empty" } };
+  if (!eventKey) return { group: null, count: 0 };
 
   const ev        = eventsData[eventKey] || {};
   const trackStable = Array.isArray(ev?.Tracks?.["REC MdcTrack (stable)"]) ? ev.Tracks["REC MdcTrack (stable)"] : [];
@@ -83,30 +81,11 @@ export async function buildCustomEventOverlay(
   if (tracks.length === 0 && ev?.Tracks) tracks = Object.values(ev.Tracks).flat();
 
   const clusters   = ev?.CaloClusters ? Object.values(ev.CaloClusters).flat() : [];
-  const eventTime  = estimateEventTimeRange(ev, tracks, mdcHits, emcHits, tofHits, mucHits);
-  let maxTrackDtNs = 0;
-  for (const t of tracks) {
-    const points = Array.isArray(t?.pos) ? t.pos : [];
-    if (points.length < 2) continue;
-    let lengthMm = 0;
-    for (let i = 1; i < points.length; i += 1) {
-      const dx = Number(points[i][0]) - Number(points[i - 1][0]);
-      const dy = Number(points[i][1]) - Number(points[i - 1][1]);
-      const dz = Number(points[i][2]) - Number(points[i - 1][2]);
-      lengthMm += Math.hypot(dx, dy, dz);
-    }
-    const pGeV = Number(t?.pt_debug?.p_est ?? 0.6);
-    const beta = pGeV > 0 ? pGeV / Math.sqrt(pGeV * pGeV + 0.13957 * 0.13957) : 0.9;
-    const dtNs = lengthMm / Math.max(1e-6, beta * C_MM_PER_NS);
-    if (Number.isFinite(dtNs)) maxTrackDtNs = Math.max(maxTrackDtNs, dtNs);
-  }
-  const mainPhaseEndNs = Math.max(eventTime.maxNs, eventTime.minNs + maxTrackDtNs);
-  const postMainStartNs = mainPhaseEndNs + 0.5;
 
   const tm    = eventDisplay?.getThreeManager?.();
   const sm    = tm?.getSceneManager?.();
   const scene = sm?.getScene?.();
-  if (!scene) return { group: null, count: 0, eventTime: { ...eventTime } };
+  if (!scene) return { group: null, count: 0 };
 
   const THREE = await getThree();
 
@@ -141,16 +120,10 @@ export async function buildCustomEventOverlay(
     const line = new THREE.Line(geo, mat);
     line.renderOrder = 999;
 
-    let lengthMm = 0;
-    for (let i = 1; i < points.length; i += 1) lengthMm += points[i].distanceTo(points[i - 1]);
-    const pGeV  = Number(t?.pt_debug?.p_est ?? 0.6);
-    const beta  = pGeV > 0 ? pGeV / Math.sqrt(pGeV * pGeV + 0.13957 * 0.13957) : 0.9;
-    const dtNs  = lengthMm / Math.max(1e-6, beta * C_MM_PER_NS);
     const normalizedTrackId = Number.isFinite(Number(t?.trackId)) ? Number(t.trackId)
       : (Number.isFinite(Number(t?.id)) ? Number(t.id) : (count + 1));
 
-    line.userData = { kind: "track", ...t, trackId: normalizedTrackId, pointCount: points.length,
-      timeStartNs: eventTime.minNs, timeEndNs: eventTime.minNs + dtNs };
+    line.userData = { kind: "track", ...t, trackId: normalizedTrackId, pointCount: points.length };
     group.add(line);
     trackCandidateCache.push(line);
 
@@ -211,7 +184,7 @@ export async function buildCustomEventOverlay(
       const sphere = new THREE.Mesh(geo, mat);
       sphere.position.set(x, y, z);
       sphere.renderOrder = 1200 - li;
-      sphere.userData = { kind: "emc_shower", timeStartNs: postMainStartNs, ...c };
+      sphere.userData = { kind: "emc_shower", ...c };
       group.add(sphere);
     }
     count += 1;
@@ -278,7 +251,6 @@ export async function buildCustomEventOverlay(
       crystal.renderOrder = 1000;
       crystal.userData = {
         kind: "emc_hit_crystal_overlay",
-        timeStartNs: postMainStartNs,
         ...h,
       };
       group.add(crystal);
@@ -320,8 +292,7 @@ export async function buildCustomEventOverlay(
     });
     const core = new THREE.Line(coreGeo, coreMat);
     core.renderOrder = 1000;
-    const tdc = Number(h?.tdc);
-    core.userData = { kind: "mdc_hit_fire", timeStartNs: Number.isFinite(tdc) ? tdc : eventTime.maxNs, ...h };
+    core.userData = { kind: "mdc_hit_fire", ...h };
     group.add(core);
 
     if (isStereo) {
@@ -335,7 +306,7 @@ export async function buildCustomEventOverlay(
       cone.position.copy(p1).addScaledVector(dir.clone().normalize(), -coneLen * 0.5);
       cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
       cone.renderOrder = 1001;
-      cone.userData = { kind: "mdc_hit_cone", timeStartNs: Number.isFinite(tdc) ? tdc : eventTime.maxNs, ...h };
+      cone.userData = { kind: "mdc_hit_cone", ...h };
       group.add(cone);
     }
 
@@ -350,7 +321,7 @@ export async function buildCustomEventOverlay(
     const glow = new THREE.Mesh(glowGeo, glowMat);
     glow.position.copy(p1);
     glow.renderOrder = 999;
-    glow.userData = { kind: "mdc_hit_bubble", timeStartNs: Number.isFinite(tdc) ? tdc : eventTime.maxNs, ...h };
+    glow.userData = { kind: "mdc_hit_bubble", ...h };
     group.add(glow);
     count += 1;
   }
@@ -376,8 +347,7 @@ export async function buildCustomEventOverlay(
     box.position.set(x, y, z);
     box.lookAt(new THREE.Vector3(0, 0, z));
     box.renderOrder = 995;
-    const tof = Number(h?.tof);
-    box.userData = { kind: "tof_hit", timeStartNs: Number.isFinite(tof) ? tof : eventTime.minNs, ...h };
+    box.userData = { kind: "tof_hit", ...h };
     group.add(box);
     count += 1;
   }
@@ -428,7 +398,7 @@ export async function buildCustomEventOverlay(
       slab.lookAt(new THREE.Vector3(0, 0, z));
     }
     slab.renderOrder = 992;
-    slab.userData = { kind: "muc_hit_strip", timeStartNs: postMainStartNs, ...h };
+    slab.userData = { kind: "muc_hit_strip", ...h };
     group.add(slab);
     count += 1;
   }
@@ -437,7 +407,6 @@ export async function buildCustomEventOverlay(
   return {
     group,
     count,
-    eventTime: { ...eventTime, maxNs: Math.max(eventTime.maxNs, postMainStartNs) },
   };
 }
 

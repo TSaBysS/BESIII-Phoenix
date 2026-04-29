@@ -6,10 +6,9 @@
 2. [REC 文件使用了哪些信息](#2-rec-文件使用了哪些信息)
 3. [Truth Track 是如何画的](#3-truth-track-是如何画的)
 4. [Truth Track 与 Rec Track 的匹配](#4-truth-track-与-rec-track-的匹配)
-5. [动画时间轴的时间来源](#5-动画时间轴的时间来源)
-6. [Rec Track 是如何画的](#6-rec-track-是如何画的)
-7. [坐标约定](#7-坐标约定)
-8. [PID 具体做法（补充）](#8-pid-具体做法补充)
+5. [Rec Track 是如何画的](#5-rec-track-是如何画的)
+6. [坐标约定](#6-坐标约定)
+7. [PID 具体做法（补充）](#7-pid-具体做法补充)
 
 ---
 
@@ -159,41 +158,7 @@ score = meanDist + 0.2 × dStart + 1.5 × angleDeg
 
 ---
 
-## 5. 动画时间轴的时间来源
-
-时间轴范围 `[minNs, maxNs]` 由 `timeline.js` 中的 `estimateEventTimeRange()` 确定，优先级如下：
-
-### 优先：来自击中的真实时间（ns）
-
-- **MDC 击中**：使用 `tdc`（漂移时间，ns 单位）
-- **EMC 击中**：使用 `time`（ns 单位）
-- **TOF 击中**：使用 `tof`（飞行时间，ns 单位）
-- **MUC 击中**：使用 `timeChannel`（数字化时间道，ns 单位）；若无则用 `depth × 5.0` 作为伪时间
-
-取所有时间值的 `[min, max]` 作为时间轴范围。
-
-### 备用：从径迹长度估算
-
-若击中时间不足（< 2 个有效值），改为从径迹几何估算：
-
-```
-dtNs = 折线总弧长(mm) / (β × c_mm_per_ns)
-```
-
-其中 `β = p / sqrt(p² + m_π²)`，使用 π 介子质量作为默认假设（`m_π = 0.13957 GeV/c²`），`c = 299.792458 mm/ns`。
-
-每个可绘对象（track/hit/shower）的 `timeStartNs` 字段决定它在时间轴上何时出现：
-- **Track**：从事件时间最小值开始，按上述公式线性延伸到 `timeEndNs`（径迹渐渐延伸）
-- **MDC 击中**：`timeStartNs = tdc`（精确）
-- **EMC 击中**：`timeStartNs = time`（精确）；shower 使用 EMC 击中时间的中间值或事件时间中段估算
-- **TOF 击中**：`timeStartNs = tof`
-- **MUC 击中**：`timeStartNs = timeChannel`（来自 digi 数据，若缺失则 `depth × 5.0`）
-
-动画速度：`40 ns/s`（实时加速约 `1/40ns × c = ~1e7` 倍）。
-
----
-
-## 6. Rec Track 是如何画的
+## 5. Rec Track 是如何画的
 
 ### 主路径：Kalman 滤波径迹（stable 模式）
 
@@ -230,7 +195,7 @@ helix = [dr, φ₀, κ, dz, tanλ]
 
 ---
 
-## 7. 坐标轴约定
+## 6. 坐标轴约定
 
 ### 几何坐标（探测器）
 
@@ -258,7 +223,7 @@ helix = [dr, φ₀, κ, dz, tanλ]
 
 ---
 
-## 8. PID 具体做法（补充）
+## 7. PID 具体做法（补充）
 
 PID 功能由 `web/pid-tools.js`（算法与格式化）和 `web/pid-interaction.js`（交互）共同完成，入口在 `web/app.js` 中初始化。
 
@@ -315,7 +280,7 @@ PID 功能由 `web/pid-tools.js`（算法与格式化）和 `web/pid-interaction
 ```
 BESIII_PhoenixCheck/
 ├── scripts/
-│   ├── bes3_visualize.sh          # 统一入口：prepare/serve/view/list
+│   ├── bes3_visualize.sh          # 统一入口：prepare/prepare-event
 │   ├── prepare_geometry.py        # 几何预处理（approximate + split-mdc）
 │   ├── export_geometry.C          # ROOT宏：GDML→ROOT JSON / MUC strip map
 │   ├── prepare_events.py          # REC→Phoenix事件JSON（含PID融合、MC truth）
@@ -328,7 +293,6 @@ BESIII_PhoenixCheck/
     ├── app.js                     # 主入口，编排所有模块
     ├── loader.js                  # Phoenix加载、几何初始化
     ├── event-renderer.js          # Three.js事件绘制（tracks/hits/clusters）
-    ├── timeline.js                # 动画时间轴状态和控制
     ├── truth.js                   # MC truth匹配算法
     ├── pid-tools.js               # PID概率解析和显示
     ├── pid-interaction.js         # 鼠标拾取和PID面板交互
