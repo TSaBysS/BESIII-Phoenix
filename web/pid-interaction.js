@@ -357,25 +357,20 @@ export async function bindTrackInteractionsIfNeeded() {
 
     const showerObjs = getShowerCandidateObjects();
     const trackObjs = getPidSelectableObjects();
-    const allObjs = [...showerObjs, ...trackObjs];
-    const hits = raycaster.instance.intersectObjects(allObjs, false);
+
+    // Raycast EMC showers alone first. Combined intersectObjects(shower+track) usually picks the
+    // reco track (closer along the ray) on busy real-data events; MC subsamples often have fewer hits.
+    if (!evt?.altKey && showerObjs.length) {
+      const showerHits = raycaster.instance.intersectObjects(showerObjs, false);
+      const sh = showerHits[0];
+      if (sh?.object?.userData?.kind === "emc_shower") {
+        return { type: "shower", data: sh.object.userData };
+      }
+    }
+
+    const hits = raycaster.instance.intersectObjects(trackObjs, false);
     if (hits.length) {
-      const firstTrack = hits.find((h) => {
-        const k = h?.object?.userData?.kind;
-        return k === "track" || k === "track_points";
-      });
-      const firstShower = hits.find((h) => h?.object?.userData?.kind === "emc_shower");
-      if (evt?.shiftKey && firstShower) {
-        return { type: "shower", data: firstShower.object.userData };
-      }
-      if (evt?.altKey && firstTrack) {
-        return { type: "track", data: Number(firstTrack.object?.userData?.trackId) };
-      }
-      const h0 = hits[0];
-      if (h0?.object?.userData?.kind === "emc_shower") {
-        return { type: "shower", data: h0.object.userData };
-      }
-      const tid = Number(h0?.object?.userData?.trackId);
+      const tid = Number(hits[0]?.object?.userData?.trackId);
       if (Number.isFinite(tid)) return { type: "track", data: tid };
     }
     const fallbackTrack = await pickTrackByScreenProximity(evt);
@@ -411,7 +406,7 @@ export async function bindTrackInteractionsIfNeeded() {
       const info = getTrackInfoById(tid);
       showTrackHoverTip(evt.clientX, evt.clientY, info?.mode === "mc" ? `Truth track ${tid}` : `Track ${tid} (click for PID)`);
     } else if (target?.type === "shower") {
-      showTrackHoverTip(evt.clientX, evt.clientY, "Shower (click for detail, Shift=prefer shower)");
+      showTrackHoverTip(evt.clientX, evt.clientY, "Shower (click for detail; Alt = pick track behind)");
     } else {
       hideTrackHoverTip();
     }
@@ -449,22 +444,26 @@ export async function bindTrackInteractionsIfNeeded() {
     refreshTrackSelectionVisuals();
   };
 
-  const onMouseDown = (evt) => { selectionMouseDownPos = { x: evt.clientX, y: evt.clientY }; };
-  const onMouseUp   = async (evt) => {
+  const onMouseDown = (evt) => {
+    selectionMouseDownPos = { x: evt.clientX, y: evt.clientY };
+  };
+
+  /** Single click handler (drag threshold). Avoid duplicate mouseup + click + window listeners — those fired onClick 2–4× per gesture and broke shower panel opens. */
+  const onCanvasClick = async (evt) => {
     if (!interactionState.pidMode || !selectionMouseDownPos) return;
     const dx = evt.clientX - selectionMouseDownPos.x;
     const dy = evt.clientY - selectionMouseDownPos.y;
     selectionMouseDownPos = null;
-    if (Math.hypot(dx, dy) <= 10) await onClick(evt);
+    if (Math.hypot(dx, dy) > 10) return;
+    await onClick(evt);
   };
 
-  canvas.addEventListener("mousemove",  onMove,      true);
-  canvas.addEventListener("mouseleave", onLeave,     true);
-  canvas.addEventListener("mousedown",  onMouseDown, true);
-  canvas.addEventListener("mouseup",    onMouseUp,   true);
+  canvas.addEventListener("mousemove",  onMove,       true);
+  canvas.addEventListener("mouseleave", onLeave,      true);
+  canvas.addEventListener("mousedown",  onMouseDown,  true);
+  canvas.addEventListener("click",      onCanvasClick, true);
   _viewerEl.addEventListener("pointermove",  onMove,  true);
   _viewerEl.addEventListener("pointerleave", onLeave, true);
-  _viewerEl.addEventListener("click",        onClick, true);
 
   if (!globalPointerBound) {
     const inside = (evt) => {
@@ -472,9 +471,7 @@ export async function bindTrackInteractionsIfNeeded() {
       return evt.clientX >= rect.left && evt.clientX <= rect.right && evt.clientY >= rect.top && evt.clientY <= rect.bottom;
     };
     window.addEventListener("pointermove", (evt) => { if (!interactionState.pidMode) return; if (inside(evt)) onMove(evt); else onLeave(); }, true);
-    window.addEventListener("click",       (evt) => { if (!interactionState.pidMode) return; if (inside(evt)) onClick(evt); }, true);
     window.addEventListener("mousemove",   (evt) => { if (!interactionState.pidMode) return; if (inside(evt)) onMove(evt); else onLeave(); }, true);
-    window.addEventListener("mouseup",     (evt) => { if (!interactionState.pidMode) return; if (inside(evt)) onClick(evt); }, true);
     globalPointerBound = true;
   }
 
