@@ -89,7 +89,12 @@ export function getTrackCandidateObjects() {
 }
 
 function getPidSelectableObjects() {
-  return getTrackCandidateObjects().filter((obj) => obj?.userData?.mode !== "mc");
+  return getTrackCandidateObjects().filter((obj) => {
+    const mode = String(obj?.userData?.mode || "");
+    if (mode !== "mc") return true;
+    // Keep normal charged truth tracks non-pickable in PID mode.
+    return Boolean(obj?.userData?.truthPidSelectable);
+  });
 }
 
 function getShowerCandidateObjects() {
@@ -173,8 +178,8 @@ export function refreshTrackSelectionVisuals() {
       if (!mat) return;
       const baseOpac = Number(
         ud.kind === "track_points"
-          ? (ud.mode === "mc" ? 0.88 : 0.86)
-          : (ud.mode === "mc" ? 0.94 : 0.92),
+          ? ((ud.mode === "mc" || ud.mode === "mc_neutrino") ? 0.88 : 0.86)
+          : ((ud.mode === "mc" || ud.mode === "mc_neutrino") ? 0.94 : 0.92),
       );
       if (isSelected) {
         mat.opacity = Math.min(1.0, baseOpac + 0.08);
@@ -186,9 +191,9 @@ export function refreshTrackSelectionVisuals() {
       } else {
         mat.opacity = baseOpac;
         if (ud.kind === "track_points" && Number.isFinite(mat.size))
-          mat.size = ud.mode === "mc" ? 4.2 : 3.6;
+          mat.size = (ud.mode === "mc" || ud.mode === "mc_neutrino") ? 4.2 : 3.6;
         if (mat.color?.setHex) {
-          const fallback = ud.mode === "mc" ? 0x40c4ff : 0xff6161;
+          const fallback = (ud.mode === "mc" || ud.mode === "mc_neutrino") ? 0x40c4ff : 0xff6161;
           mat.color.setHex(fallback);
         }
       }
@@ -220,18 +225,44 @@ export function renderTrackInfoPanel(trackInfo) {
     _trackInfoPanelEl.innerHTML = "";
     return;
   }
-  const p      = Number(trackInfo?.pt_debug?.p_est ?? 0);
+  const isTruthTrack = String(trackInfo?.mode || "").startsWith("mc");
+  const p      = Number(trackInfo?.pt_debug?.p_est ?? trackInfo?.p ?? 0);
   const nhits  = Number(trackInfo?.nhits ?? -1);
   const selectedEventKey = _eventSelectEl?.value || "";
   const ev     = (selectedEventKey && _cachedEventsData?.()?.[selectedEventKey]) ? _cachedEventsData()[selectedEventKey] : null;
   const hasMcTruth = Array.isArray(ev?.Tracks?.["MC Truth"]) && ev.Tracks["MC Truth"].length > 0;
+  const rows = [];
+  if (isTruthTrack) {
+    const formatTruthPdgLabel = (pdg) => {
+      const id = Number(pdg);
+      if (!Number.isFinite(id)) return "N/A";
+      const m = {
+        12: "nu_e",
+        [-12]: "anti-nu_e",
+        14: "nu_mu",
+        [-14]: "anti-nu_mu",
+        16: "nu_tau",
+        [-16]: "anti-nu_tau",
+      };
+      return m[id] || String(Math.trunc(id));
+    };
+    const pdg = Number(trackInfo?.pdg);
+    const motherPdg = Number(trackInfo?.motherPdg);
+    const kinE = Number(trackInfo?.kineticEnergy);
+    rows.push(`<div class="kv"><strong>PDG ID:</strong> ${Number.isFinite(pdg) ? Math.trunc(pdg) : "N/A"} (${formatTruthPdgLabel(pdg)})</div>`);
+    rows.push(`<div class="kv"><strong>Momentum:</strong> ${Number.isFinite(p) ? p.toFixed(3) : "N/A"} GeV/c</div>`);
+    rows.push(`<div class="kv"><strong>Kinetic Energy:</strong> ${Number.isFinite(kinE) ? kinE.toFixed(3) : "N/A"} GeV</div>`);
+    rows.push(`<div class="kv"><strong>Mother PDG:</strong> ${Number.isFinite(motherPdg) ? Math.trunc(motherPdg) : "N/A"}</div>`);
+    _trackInfoPanelEl.innerHTML = `<h4>Truth Track Detail</h4>${rows.join("")}`;
+    _trackInfoPanelEl.classList.add("open");
+    return;
+  }
+
   const pidPick = selectPidForTrack(ev, trackInfo?.trackId, trackInfo);
   const { normalizedProb, top } = buildPidDisplay(pidPick?.pid || {});
 
-  const rows = [
-    `<div class="kv"><strong>Momentum:</strong> ${Number.isFinite(p) ? p.toFixed(3) : "N/A"} GeV/c</div>`,
-    `<div class="kv"><strong>Hits:</strong> ${nhits >= 0 ? nhits : "N/A"}</div>`,
-  ];
+  rows.push(`<div class="kv"><strong>Momentum:</strong> ${Number.isFinite(p) ? p.toFixed(3) : "N/A"} GeV/c</div>`);
+  rows.push(`<div class="kv"><strong>Hits:</strong> ${nhits >= 0 ? nhits : "N/A"}</div>`);
   if (hasMcTruth && trackInfo?.mode !== "mc") {
     const truth = computeClosestTruthMatch(trackInfo, ev);
     if (truth) {
@@ -404,7 +435,11 @@ export async function bindTrackInteractionsIfNeeded() {
     interactionState.hoveredTrackId = tid;
     if (target?.type === "track" && Number.isFinite(tid)) {
       const info = getTrackInfoById(tid);
-      showTrackHoverTip(evt.clientX, evt.clientY, info?.mode === "mc" ? `Truth track ${tid}` : `Track ${tid} (click for PID)`);
+      if (info?.mode === "mc" || info?.mode === "mc_neutrino") {
+        showTrackHoverTip(evt.clientX, evt.clientY, `Truth track ${tid}`);
+      } else {
+        showTrackHoverTip(evt.clientX, evt.clientY, `Track ${tid} (click for PID)`);
+      }
     } else if (target?.type === "shower") {
       showTrackHoverTip(evt.clientX, evt.clientY, "Shower (click for detail; Alt = pick track behind)");
     } else {
@@ -427,7 +462,8 @@ export async function bindTrackInteractionsIfNeeded() {
     if (target?.type === "track") {
       const tid = Number(target.data);
       const info = getTrackInfoById(tid);
-      if (!info || info?.mode === "mc") return;
+      if (!info) return;
+      if (String(info?.mode || "") === "mc") return;
       interactionState.selectedTrackId = tid;
       renderTrackInfoPanel(info);
     } else {

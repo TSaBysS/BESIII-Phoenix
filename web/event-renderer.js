@@ -36,7 +36,7 @@ export function scaleEventPoint(p) {
   return [x * EVENT_GLOBAL_R_SCALE, y * EVENT_GLOBAL_R_SCALE, z * EVENT_GLOBAL_R_SCALE];
 }
 
-/** MDC envelope in mm (display-only clip for MC truth polylines; JSON stays full helix). */
+/** MDC envelope in mm (display-only clip for charged MC truth polylines). */
 const MDC_DRAW_R_MM = 810;
 const MDC_DRAW_Z_MM = 1450;
 
@@ -126,7 +126,9 @@ export async function buildCustomEventOverlay(
   for (const t of tracks) {
     const rawPos = t?.pos || [];
     if (!Array.isArray(rawPos) || rawPos.length < 2) continue;
-    const pos = t?.mode === "mc" ? clipMcTruthPosToMdcCylinder(rawPos) : rawPos;
+    const isMcChargedTruth = t?.mode === "mc";
+    const isMcNeutrino = t?.mode === "mc_neutrino";
+    const pos = isMcChargedTruth ? clipMcTruthPosToMdcCylinder(rawPos) : rawPos;
     if (!Array.isArray(pos) || pos.length < 2) continue;
     const points = pos
       .filter((p) => Array.isArray(p) && p.length >= 3)
@@ -136,8 +138,8 @@ export async function buildCustomEventOverlay(
 
     const geo = new THREE.BufferGeometry().setFromPoints(points);
     // Colour convention: red=stable, light-blue=MC truth.
-    const lineColor = t?.mode === "mc" ? 0x90caf9 : 0xff4d4d;
-    const lineOpac  = t?.mode === "mc" ? 0.72     : 0.92;
+    const lineColor = isMcNeutrino ? 0x9fa8da : (isMcChargedTruth ? 0x90caf9 : 0xff4d4d);
+    const lineOpac  = isMcNeutrino ? 0.95     : (isMcChargedTruth ? 0.72 : 0.92);
     const mat = new THREE.LineBasicMaterial({
       color: lineColor, transparent: true, opacity: lineOpac, depthTest: false, depthWrite: false,
     });
@@ -151,17 +153,19 @@ export async function buildCustomEventOverlay(
     group.add(line);
     trackCandidateCache.push(line);
 
-    // Dense luminous point cloud for visibility.
-    const ptColor = t?.mode === "mc" ? 0x40c4ff : 0xff6161;
-    const ptMat = new THREE.PointsMaterial({
-      color: ptColor, size: t?.mode === "mc" ? 4.2 : 3.6, sizeAttenuation: true,
-      transparent: true, opacity: t?.mode === "mc" ? 0.88 : 0.86, depthTest: false, depthWrite: false,
-    });
-    const ptObj = new THREE.Points(geo.clone(), ptMat);
-    ptObj.renderOrder = 998;
-    ptObj.userData = { ...line.userData, kind: "track_points" };
-    group.add(ptObj);
-    trackCandidateCache.push(ptObj);
+    // Keep neutrinos as ray-only lines; charged/reco tracks also get points.
+    if (!isMcNeutrino) {
+      const ptColor = isMcChargedTruth ? 0x40c4ff : 0xff6161;
+      const ptMat = new THREE.PointsMaterial({
+        color: ptColor, size: isMcChargedTruth ? 4.2 : 3.6, sizeAttenuation: true,
+        transparent: true, opacity: isMcChargedTruth ? 0.88 : 0.86, depthTest: false, depthWrite: false,
+      });
+      const ptObj = new THREE.Points(geo.clone(), ptMat);
+      ptObj.renderOrder = 998;
+      ptObj.userData = { ...line.userData, kind: "track_points" };
+      group.add(ptObj);
+      trackCandidateCache.push(ptObj);
+    }
     count += 1;
   }
 
