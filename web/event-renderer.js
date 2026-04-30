@@ -138,7 +138,7 @@ export async function buildCustomEventOverlay(
 
     const geo = new THREE.BufferGeometry().setFromPoints(points);
     // Colour convention: red=stable, light-blue=MC truth.
-    const lineColor = isMcNeutrino ? 0x9fa8da : (isMcChargedTruth ? 0x90caf9 : 0xff4d4d);
+    const lineColor = isMcNeutrino ? 0x90caf9 : (isMcChargedTruth ? 0x90caf9 : 0xff4d4d);
     const lineOpac  = isMcNeutrino ? 0.95     : (isMcChargedTruth ? 0.72 : 0.92);
     const mat = new THREE.LineBasicMaterial({
       color: lineColor, transparent: true, opacity: lineOpac, depthTest: false, depthWrite: false,
@@ -152,6 +152,18 @@ export async function buildCustomEventOverlay(
     line.userData = { kind: "track", ...t, trackId: normalizedTrackId, pointCount: points.length };
     group.add(line);
     trackCandidateCache.push(line);
+
+    // Add a brighter halo line for neutrinos to emulate a slightly thicker blue ray.
+    if (isMcNeutrino) {
+      const haloMat = new THREE.LineBasicMaterial({
+        color: 0x40c4ff, transparent: true, opacity: 0.72, depthTest: false, depthWrite: false,
+      });
+      const haloLine = new THREE.Line(geo.clone(), haloMat);
+      haloLine.renderOrder = 1000;
+      haloLine.userData = { ...line.userData, kind: "track" };
+      group.add(haloLine);
+      trackCandidateCache.push(haloLine);
+    }
 
     // Keep neutrinos as ray-only lines; charged/reco tracks also get points.
     if (!isMcNeutrino) {

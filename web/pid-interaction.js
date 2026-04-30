@@ -250,7 +250,8 @@ export function renderTrackInfoPanel(trackInfo) {
     const motherPdg = Number(trackInfo?.motherPdg);
     const kinE = Number(trackInfo?.kineticEnergy);
     rows.push(`<div class="kv"><strong>PDG ID:</strong> ${Number.isFinite(pdg) ? Math.trunc(pdg) : "N/A"} (${formatTruthPdgLabel(pdg)})</div>`);
-    rows.push(`<div class="kv"><strong>Momentum:</strong> ${Number.isFinite(p) ? p.toFixed(3) : "N/A"} GeV/c</div>`);
+    rows.push(`<div class="kv"><strong>Reco Momentum:</strong> N/A</div>`);
+    rows.push(`<div class="kv"><strong>Truth Momentum:</strong> ${Number.isFinite(p) ? p.toFixed(3) : "N/A"} GeV/c</div>`);
     rows.push(`<div class="kv"><strong>Kinetic Energy:</strong> ${Number.isFinite(kinE) ? kinE.toFixed(3) : "N/A"} GeV</div>`);
     rows.push(`<div class="kv"><strong>Mother PDG:</strong> ${Number.isFinite(motherPdg) ? Math.trunc(motherPdg) : "N/A"}</div>`);
     _trackInfoPanelEl.innerHTML = `<h4>Truth Track Detail</h4>${rows.join("")}`;
