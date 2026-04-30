@@ -296,18 +296,41 @@ function setImportStatus(text, color = "#8db8f0") {
   if (eventImportStatusEl) { eventImportStatusEl.textContent = text; eventImportStatusEl.style.color = color; }
 }
 
+function mergeEventDataMaps(existingData, incomingData) {
+  const base = (existingData && typeof existingData === "object") ? { ...existingData } : {};
+  const incoming = (incomingData && typeof incomingData === "object") ? incomingData : {};
+  const addedKeys = [];
+  for (const [key, ev] of Object.entries(incoming)) {
+    let candidate = key;
+    let idx = 2;
+    while (Object.prototype.hasOwnProperty.call(base, candidate)) {
+      candidate = `${key}#${idx}`;
+      idx += 1;
+    }
+    base[candidate] = ev;
+    addedKeys.push(candidate);
+  }
+  return { merged: base, addedKeys };
+}
+
 async function applyEventData(data, filename) {
   if (!currentEventDisplay) { setImportStatus("请等待探测器几何加载完成", "#ffcc66"); return; }
-  cachedEventsData = data;
+  const { merged, addedKeys } = mergeEventDataMaps(cachedEventsData, data);
+  cachedEventsData = merged;
 
   const selectedEventKey = setupEventUi(cachedEventsData);
-  const selectedEvent    = (selectedEventKey && cachedEventsData?.[selectedEventKey]) ? cachedEventsData[selectedEventKey] : null;
+  if (addedKeys.length > 0 && eventSelectEl) {
+    eventSelectEl.value = addedKeys[0];
+  }
+  const activeKey = eventSelectEl?.value || selectedEventKey;
+  const selectedEvent    = (activeKey && cachedEventsData?.[activeKey]) ? cachedEventsData[activeKey] : null;
   const showMc = setupMcTruthUi(selectedEvent || {});
 
   if (eventSelectEl) eventSelectEl.style.display = "block";
   if (btnClearEventEl) btnClearEventEl.style.display = "block";
   updateEventNavButtons();
-  setImportStatus(`已加载: ${filename || "event.json"}`, "#72e072");
+  const loadedMsg = filename || "event.json";
+  setImportStatus(`已追加: ${loadedMsg} (+${addedKeys.length}, total=${Object.keys(cachedEventsData || {}).length})`, "#72e072");
 
   const result = await buildCustomEventOverlay(
     currentEventDisplay, cachedEventsData, selectedEventKey, showMc,
@@ -316,7 +339,7 @@ async function applyEventData(data, filename) {
     currentOverlayGroup = result.group;
   }
   const count = result?.count ?? 0;
-  setStatus(`事例已加载 (event=${selectedEventKey || "N/A"}, ${count} objects)`, count > 0 ? "ok" : "warn");
+  setStatus(`事例已加载 (event=${activeKey || "N/A"}, ${count} objects)`, count > 0 ? "ok" : "warn");
   await bindTrackInteractionsIfNeeded();
 }
 
