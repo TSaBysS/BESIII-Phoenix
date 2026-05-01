@@ -13,7 +13,7 @@ import {
   getGeometryList, assembledComponents,
   loadPhoenix, loadJsrootGeometry, loadThreeFallback,
   applyOpacityToNamedGeometry, adjustPhoenixCamera, phoenixLastError,
-  getLastEmcDebugInfo, refreshEmcDebugInfo, EMC_DEBUG_SCHEMA_VERSION,
+  getLastEmcDebugInfo, refreshEmcDebugInfo,
 } from "./loader.js";
 import {
   buildCustomEventOverlay, clearCustomEventOverlay, trackCandidateCache, clearTrackCandidateCache,
@@ -69,6 +69,7 @@ let currentOverlayGroup  = null;
 let loaderProgressValue  = 10;
 let importInProgress     = false;
 let emcDebugTimer        = null;
+const EMC_DEBUG_SCHEMA_EXPECT = "emc-debug-v2";
 
 // ── loader progress ───────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ function updateEmcDebugPanel() {
   const show = (v) => (v == null ? "n/a" : String(v));
   const lines = [
     "EMC debug (temporary)",
-    `schema: ${show(info.debugSchemaVersion)} (expect: ${EMC_DEBUG_SCHEMA_VERSION})`,
+    `schema: ${show(info.debugSchemaVersion)} (expect: ${EMC_DEBUG_SCHEMA_EXPECT})`,
     `total/visible objs: ${info.totalObjects}/${info.visibleObjects}`,
     `mesh visible: ${info.visibleMeshes}/${info.meshes}`,
     `emc-like mesh visible: ${show(info.emcLikeVisibleMeshes)}/${show(info.emcLikeMeshes)}`,
