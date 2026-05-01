@@ -83,8 +83,6 @@ export function getGeometryList(view = getSelectedView()) {
 export let phoenixCtor = null;
 export let phoenixApi  = null;
 export let phoenixLastError = "";
-export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v8";
-let lastEmcDebugInfo = null;
 
 const GEOMETRY_CACHE_BUST = "geomv8";
 
@@ -92,10 +90,6 @@ function withGeometryCacheBust(path) {
   if (!path) return path;
   return path.includes("?") ? `${path}&v=${GEOMETRY_CACHE_BUST}` : `${path}?v=${GEOMETRY_CACHE_BUST}`;
 }
-
-export function setPhoenixCtor(v) { phoenixCtor = v; }
-export function setPhoenixApi(v)  { phoenixApi  = v; }
-export function getLastEmcDebugInfo() { return lastEmcDebugInfo; }
 
 // ── geometry opacity helpers ──────────────────────────────────────────────────
 
@@ -224,179 +218,6 @@ function normalizeEmcEndcapAppearance(eventDisplay) {
     });
   } catch (err) {
     console.warn("Normalize EMC endcap appearance skipped:", err);
-  }
-}
-
-function hideEmcContainerShells(eventDisplay) {
-  try {
-    const tm = eventDisplay?.getThreeManager?.();
-    const sm = tm?.getSceneManager?.();
-    const geometries = sm?.getGeometries?.() || sm?.getScene?.();
-    if (!geometries) return;
-    const hideExactNames = new Set([
-      "logicalendworld",
-      "logicalbscworld",
-      "solidendworld",
-      "solidbscworld",
-      "solidbscworld0",
-    ]);
-    geometries.traverse?.((obj) => {
-      const n = String(obj?.name || "").toLowerCase();
-      if (!n) return;
-      if (n === "emc" || n === "logicalemc" || n === "solidemc") return;
-      // Use exact-name targeting only. Broad includes() can accidentally match
-      // many crystal meshes in some Phoenix exports.
-      if (!hideExactNames.has(n)) return;
-      // Do not hide the full node; parent containers may own crystal children.
-      // Only suppress the container shell material itself.
-      if (obj?.material) {
-        // Phoenix/ROOT imports may share one material instance across many meshes.
-        // Clone on targeted container nodes to avoid turning crystals transparent too.
-        if (Array.isArray(obj.material)) obj.material = obj.material.map((m) => (m?.clone ? m.clone() : m));
-        else if (obj.material?.clone) obj.material = obj.material.clone();
-      }
-      const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
-      mats.forEach((mat) => {
-        if (!mat) return;
-        mat.transparent = true;
-        mat.opacity = 0.0;
-        mat.depthTest = false;
-        mat.depthWrite = false;
-        obj.renderOrder = -1000;
-        mat.needsUpdate = true;
-      });
-    });
-  } catch (err) {
-    console.warn("Hide EMC container shells skipped:", err);
-  }
-}
-
-export function refreshEmcDebugInfo(eventDisplay) {
-  try {
-    const tm = eventDisplay?.getThreeManager?.();
-    const sm = tm?.getSceneManager?.();
-    const geometries = sm?.getGeometries?.() || sm?.getScene?.();
-    if (!geometries) {
-      lastEmcDebugInfo = { ready: false, reason: "no-geometries" };
-      return lastEmcDebugInfo;
-    }
-    const info = {
-      ready: true,
-      debugSchemaVersion: EMC_DEBUG_SCHEMA_VERSION,
-      timestamp: Date.now(),
-      totalObjects: 0,
-      visibleObjects: 0,
-      emcRootHits: 0,
-      logicalEndCrystal: 0,
-      logicalEndCrystalVisible: 0,
-      logicalEndCasing: 0,
-      logicalEndCasingVisible: 0,
-      logicalBscCasing: 0,
-      logicalBscCasingVisible: 0,
-      logicalEndWorld: 0,
-      logicalEndWorldVisible: 0,
-      logicalBscWorld: 0,
-      logicalBscWorldVisible: 0,
-      meshes: 0,
-      visibleMeshes: 0,
-      emcLikeObjects: 0,
-      emcLikeMeshes: 0,
-      emcLikeVisibleMeshes: 0,
-      worldLikeObjects: 0,
-      worldLikeVisible: 0,
-      crystalLikeObjects: 0,
-      crystalLikeVisible: 0,
-      casingLikeObjects: 0,
-      casingLikeVisible: 0,
-      transparentMaterials: 0,
-      opaqueMaterials: 0,
-      zeroOpacityMaterials: 0,
-      hiddenObjects: 0,
-      zeroOpacityObjectSamples: [],
-      emcSubtreeObjects: 0,
-      emcSubtreeMeshes: 0,
-      emcSubtreeNameSamples: [],
-    };
-    geometries.traverse?.((obj) => {
-      info.totalObjects += 1;
-      if (obj?.visible !== false) info.visibleObjects += 1;
-      else info.hiddenObjects += 1;
-      if (obj?.isMesh) {
-        info.meshes += 1;
-        if (obj?.visible !== false) info.visibleMeshes += 1;
-      }
-      const n = String(obj?.name || "").toLowerCase();
-      const objLooksEmc = n.includes("emc") || n.includes("bsc") || n.includes("end");
-      if (objLooksEmc) {
-        info.emcLikeObjects += 1;
-        if (obj?.isMesh) {
-          info.emcLikeMeshes += 1;
-          if (obj?.visible !== false) info.emcLikeVisibleMeshes += 1;
-        }
-      }
-      if (n.includes("world")) {
-        info.worldLikeObjects += 1;
-        if (obj?.visible !== false) info.worldLikeVisible += 1;
-      }
-      if (n.includes("crystal")) {
-        info.crystalLikeObjects += 1;
-        if (obj?.visible !== false) info.crystalLikeVisible += 1;
-      }
-      if (n.includes("casing")) {
-        info.casingLikeObjects += 1;
-        if (obj?.visible !== false) info.casingLikeVisible += 1;
-      }
-      const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
-      mats.forEach((mat) => {
-        if (!mat) return;
-        if (mat.transparent) info.transparentMaterials += 1;
-        else info.opaqueMaterials += 1;
-        if (Number(mat.opacity) <= 0.001) {
-          info.zeroOpacityMaterials += 1;
-          if (info.zeroOpacityObjectSamples.length < 8) {
-            info.zeroOpacityObjectSamples.push(String(obj?.name || "(no-name)"));
-          }
-        }
-      });
-      if (!n) return;
-      if (n === "emc" || n.includes("logicalemc") || n.includes("solidemc")) info.emcRootHits += 1;
-      if (n.includes("logicalendcrystal_")) {
-        info.logicalEndCrystal += 1;
-        if (obj?.visible !== false) info.logicalEndCrystalVisible += 1;
-      }
-      if (n.includes("logicalendcasing_")) {
-        info.logicalEndCasing += 1;
-        if (obj?.visible !== false) info.logicalEndCasingVisible += 1;
-      }
-      if (n.includes("logicalbsccasing")) {
-        info.logicalBscCasing += 1;
-        if (obj?.visible !== false) info.logicalBscCasingVisible += 1;
-      }
-      if (n.includes("logicalendworld") || n.includes("solidendworld")) {
-        info.logicalEndWorld += 1;
-        if (obj?.visible !== false) info.logicalEndWorldVisible += 1;
-      }
-      if (n.includes("logicalbscworld") || n.includes("solidbscworld")) {
-        info.logicalBscWorld += 1;
-        if (obj?.visible !== false) info.logicalBscWorldVisible += 1;
-      }
-    });
-    const emcRoots = findNamedGeometryRoots(geometries, "emc");
-    const emcNameSet = new Set();
-    emcRoots.forEach((root) => {
-      root.traverse?.((obj) => {
-        info.emcSubtreeObjects += 1;
-        if (obj?.isMesh) info.emcSubtreeMeshes += 1;
-        const name = String(obj?.name || "(no-name)");
-        if (emcNameSet.size < 12) emcNameSet.add(name);
-      });
-    });
-    info.emcSubtreeNameSamples = Array.from(emcNameSet);
-    lastEmcDebugInfo = info;
-    return info;
-  } catch (err) {
-    lastEmcDebugInfo = { ready: false, reason: String(err?.message || err || "unknown") };
-    return lastEmcDebugInfo;
   }
 }
 
@@ -539,10 +360,6 @@ export async function loadPhoenix(viewerEl) {
     await forceDoubleSidedForNamedGeometry(eventDisplay, "emc");
     normalizeEmcEndcapAppearance(eventDisplay);
     applyDetectorOpacityFromUi(eventDisplay);
-    // Temporarily disable container suppression; it can interfere with
-    // shared materials in some Phoenix builds and mask the root issue.
-    // hideEmcContainerShells(eventDisplay);
-    refreshEmcDebugInfo(eventDisplay);
     await adjustPhoenixCamera(eventDisplay);
     return eventDisplay;
   }
@@ -557,10 +374,6 @@ export async function loadPhoenix(viewerEl) {
     await forceDoubleSidedForNamedGeometry(apiObj, "emc");
     normalizeEmcEndcapAppearance(apiObj);
     applyDetectorOpacityFromUi(apiObj);
-    // Temporarily disable container suppression; it can interfere with
-    // shared materials in some Phoenix builds and mask the root issue.
-    // hideEmcContainerShells(apiObj);
-    refreshEmcDebugInfo(apiObj);
     return apiObj;
   }
 
