@@ -176,6 +176,39 @@ async function forceDoubleSidedForNamedGeometry(eventDisplay, objectName) {
   }
 }
 
+function hideEmcContainerShells(eventDisplay) {
+  try {
+    const tm = eventDisplay?.getThreeManager?.();
+    const sm = tm?.getSceneManager?.();
+    const geometries = sm?.getGeometries?.() || sm?.getScene?.();
+    if (!geometries) return;
+    const hideHints = [
+      "logicalendworld",
+      "logicalbscworld",
+      "solidendworld",
+      "solidbscworld",
+      "solidbscworld0",
+    ];
+    geometries.traverse?.((obj) => {
+      const n = String(obj?.name || "").toLowerCase();
+      if (!n) return;
+      if (n === "emc" || n === "logicalemc" || n === "solidemc") return;
+      if (!hideHints.some((k) => n.includes(k))) return;
+      obj.visible = false;
+      const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
+      mats.forEach((mat) => {
+        if (!mat) return;
+        mat.transparent = true;
+        mat.opacity = 0.0;
+        mat.depthWrite = false;
+        mat.needsUpdate = true;
+      });
+    });
+  } catch (err) {
+    console.warn("Hide EMC container shells skipped:", err);
+  }
+}
+
 // ── camera ────────────────────────────────────────────────────────────────────
 
 export async function adjustPhoenixCamera(eventDisplay) {
@@ -314,6 +347,7 @@ export async function loadPhoenix(viewerEl) {
     // EMC endcaps can disappear when source normals are flipped; force double-sided.
     await forceDoubleSidedForNamedGeometry(eventDisplay, "emc");
     applyDetectorOpacityFromUi(eventDisplay);
+    hideEmcContainerShells(eventDisplay);
     await adjustPhoenixCamera(eventDisplay);
     return eventDisplay;
   }
@@ -327,6 +361,7 @@ export async function loadPhoenix(viewerEl) {
     }
     await forceDoubleSidedForNamedGeometry(apiObj, "emc");
     applyDetectorOpacityFromUi(apiObj);
+    hideEmcContainerShells(apiObj);
     return apiObj;
   }
 
