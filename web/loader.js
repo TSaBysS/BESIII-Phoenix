@@ -39,12 +39,12 @@ function getSelectedView() {
 
 async function loadGeometryWithFallback(loader, entry) {
   try {
-    await loader(entry.path, entry.key);
+    await loader(withGeometryCacheBust(entry.path), entry.key);
   } catch (err) {
     if (entry.key !== "emc") throw err;
     const fallback = "../data/views/emc_approx.root.json";
     console.warn(`EMC mesh cache load failed, fallback to ${fallback}:`, err);
-    await loader(fallback, entry.key);
+    await loader(withGeometryCacheBust(fallback), entry.key);
   }
 }
 
@@ -71,8 +71,15 @@ export function getGeometryList(view = getSelectedView()) {
 export let phoenixCtor = null;
 export let phoenixApi  = null;
 export let phoenixLastError = "";
-export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v4";
+export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v5";
 let lastEmcDebugInfo = null;
+
+const GEOMETRY_CACHE_BUST = "geomv5";
+
+function withGeometryCacheBust(path) {
+  if (!path) return path;
+  return path.includes("?") ? `${path}&v=${GEOMETRY_CACHE_BUST}` : `${path}?v=${GEOMETRY_CACHE_BUST}`;
+}
 
 export function setPhoenixCtor(v) { phoenixCtor = v; }
 export function setPhoenixApi(v)  { phoenixApi  = v; }
