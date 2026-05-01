@@ -44,6 +44,12 @@ void export_gdml_to_rootjson(const char* inGdml, const char* outJson) {
     gSystem->Exit(3);
     return;
   }
+  // Make sure downstream web loaders can traverse full geometry trees
+  // (EMC has many nodes and endcap branches can be pruned otherwise).
+  geom->SetVisLevel(99);
+  geom->SetMaxVisNodes(1000000);
+  geom->SetVisOption(1);
+  geom->SetVisDensity(0);
   // TGeoManager::Export("*.json") is not guaranteed to emit plain JSON text.
   // Use TBufferJSON to force valid text JSON for web loaders.
   TString jsonText = TBufferJSON::ToJSON(geom).Data();
