@@ -265,6 +265,9 @@ export function refreshEmcDebugInfo(eventDisplay) {
       zeroOpacityMaterials: 0,
       hiddenObjects: 0,
       zeroOpacityObjectSamples: [],
+      emcSubtreeObjects: 0,
+      emcSubtreeMeshes: 0,
+      emcSubtreeNameSamples: [],
     };
     geometries.traverse?.((obj) => {
       info.totalObjects += 1;
@@ -330,6 +333,17 @@ export function refreshEmcDebugInfo(eventDisplay) {
         if (obj?.visible !== false) info.logicalBscWorldVisible += 1;
       }
     });
+    const emcRoots = findNamedGeometryRoots(geometries, "emc");
+    const emcNameSet = new Set();
+    emcRoots.forEach((root) => {
+      root.traverse?.((obj) => {
+        info.emcSubtreeObjects += 1;
+        if (obj?.isMesh) info.emcSubtreeMeshes += 1;
+        const name = String(obj?.name || "(no-name)");
+        if (emcNameSet.size < 12) emcNameSet.add(name);
+      });
+    });
+    info.emcSubtreeNameSamples = Array.from(emcNameSet);
     lastEmcDebugInfo = info;
     return info;
   } catch (err) {

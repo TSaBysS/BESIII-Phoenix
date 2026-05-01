@@ -127,6 +127,8 @@ function updateEmcDebugPanel() {
     `mat transparent/opaque: ${show(info.transparentMaterials)}/${show(info.opaqueMaterials)}`,
     `mat zero-opacity: ${show(info.zeroOpacityMaterials)}`,
     `zero-opacity samples: ${Array.isArray(info.zeroOpacityObjectSamples) ? info.zeroOpacityObjectSamples.join(", ") : "n/a"}`,
+    `emc-subtree objs/meshes: ${show(info.emcSubtreeObjects)}/${show(info.emcSubtreeMeshes)}`,
+    `emc-subtree names: ${Array.isArray(info.emcSubtreeNameSamples) ? info.emcSubtreeNameSamples.join(", ") : "n/a"}`,
     `hidden objs: ${show(info.hiddenObjects)}`,
     `emc root hits: ${info.emcRootHits}`,
     `EndCrystal visible: ${info.logicalEndCrystalVisible}/${info.logicalEndCrystal}`,
