@@ -94,8 +94,8 @@ function setStatus(text, klass) {
   statusEl.textContent = text;
   statusEl.className   = klass;
   if (loaderStatusEl) loaderStatusEl.textContent = text;
-  if (klass === "ok") { setLoaderProgress(100); hideLoaderOverlay(200); }
-  else if (klass === "warn" || klass === "err") { setLoaderProgress(96); hideLoaderOverlay(300); }
+  if (klass === "ok") { setLoaderProgress(92); }
+  else if (klass === "warn" || klass === "err") { setLoaderProgress(96); }
   else { setLoaderProgress(Math.min(92, loaderProgressValue + 8)); }
 }
 
@@ -487,6 +487,8 @@ async function boot() {
   try {
     await doLoadPhoenix();
     await tryLoadDefaultEventJson();
+    setLoaderProgress(100);
+    hideLoaderOverlay(180);
   } catch (phoenixErr) {
     const reason = phoenixErr?.message || phoenixLastError || "unknown reason";
     console.warn("Phoenix loading failed, switch to JSROOT geometry:", reason);
@@ -494,15 +496,21 @@ async function boot() {
       await loadJsrootGeometry(viewerEl, getGeometryList());
       setStatus("JSROOT 几何已加载，等待导入事例", "ok");
       setImportStatus("几何就绪，可以导入事例 JSON ↑");
+      setLoaderProgress(100);
+      hideLoaderOverlay(220);
     } catch (jsrootErr) {
       console.warn("JSROOT loading failed, switch to Three.js fallback:", jsrootErr);
       try {
         const topName = await loadThreeFallback(viewerEl, getGeometryList());
         setStatus(`回退预览已加载 (${topName})`, "warn");
         setImportStatus("几何就绪，可以导入事例 JSON ↑");
+        setLoaderProgress(100);
+        hideLoaderOverlay(240);
       } catch (fallbackErr) {
         console.error(fallbackErr);
         setStatus(`加载失败: ${fallbackErr.message}`, "err");
+        setLoaderProgress(100);
+        hideLoaderOverlay(260);
       }
     }
   }
