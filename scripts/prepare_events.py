@@ -30,6 +30,7 @@ PID_HYP_MASS = {
 }
 MC_TRUTH_CHARGED_PID = {11, 13, 211, 321, 2212}
 MC_TRUTH_PHOTON_PID = {22}
+MC_TRUTH_NEUTRINO_PID = {12, 14, 16}
 PDG_CHARGE = {
     11: -1,
     -11: 1,
@@ -125,6 +126,89 @@ def _mother_is_muon(mother_pdg):
         return abs(int(mother_pdg)) == 13
     except (TypeError, ValueError):
         return False
+
+
+def _particle_mass_gev_from_pdg(pdg):
+    """Return particle mass in GeV for common truth IDs used here."""
+    mass_map = {
+        11: 0.000511,
+        13: 0.105658,
+        211: 0.139570,
+        321: 0.493677,
+        2212: 0.938272,
+        12: 0.0,
+        14: 0.0,
+        16: 0.0,
+    }
+    try:
+        return float(mass_map.get(abs(int(pdg)), 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _build_mc_truth_neutrino_ray(mp, muc_rmax_mm=2600.0, muc_zmax_mm=2800.0):
+    """
+    Build a straight neutrino ray from origin point to the MUC envelope.
+    Used for PID-pickable special truth display.
+    """
+    pdg = int(_as_float(_mc_member(mp, ["m_particleID", "m_particleProperty", "m_pdgCode"], 0), 0))
+    if abs(pdg) not in MC_TRUTH_NEUTRINO_PID:
+        return None
+
+    px = _as_float(_mc_member(mp, ["m_xInitialMomentum", "m_px"], 0.0), 0.0)
+    py = _as_float(_mc_member(mp, ["m_yInitialMomentum", "m_py"], 0.0), 0.0)
+    pz = _as_float(_mc_member(mp, ["m_zInitialMomentum", "m_pz"], 0.0), 0.0)
+    p_mag = math.sqrt(px * px + py * py + pz * pz)
+    if p_mag <= 1e-12:
+        return None
+    ux, uy, uz = _unit_vec(px, py, pz)
+
+    x0 = _as_float(_mc_member(mp, ["m_xInitialPosition", "m_initialPositionX"], 0.0), 0.0) * LENGTH_SCALE
+    y0 = _as_float(_mc_member(mp, ["m_yInitialPosition", "m_initialPositionY"], 0.0), 0.0) * LENGTH_SCALE
+    z0 = _as_float(_mc_member(mp, ["m_zInitialPosition", "m_initialPositionZ"], 0.0), 0.0) * LENGTH_SCALE
+
+    t_candidates = []
+    ur2 = ux * ux + uy * uy
+    if ur2 > 1e-12:
+        b = 2.0 * (x0 * ux + y0 * uy)
+        c = x0 * x0 + y0 * y0 - muc_rmax_mm * muc_rmax_mm
+        disc = b * b - 4.0 * ur2 * c
+        if disc >= 0.0:
+            sq = math.sqrt(disc)
+            t1 = (-b + sq) / (2.0 * ur2)
+            t2 = (-b - sq) / (2.0 * ur2)
+            if t1 > 1e-6:
+                t_candidates.append(t1)
+            if t2 > 1e-6:
+                t_candidates.append(t2)
+    if abs(uz) > 1e-12:
+        tz1 = (muc_zmax_mm - z0) / uz
+        tz2 = (-muc_zmax_mm - z0) / uz
+        if tz1 > 1e-6:
+            t_candidates.append(tz1)
+        if tz2 > 1e-6:
+            t_candidates.append(tz2)
+    if not t_candidates:
+        return None
+    t_end = min(t_candidates)
+    x1 = x0 + ux * t_end
+    y1 = y0 + uy * t_end
+    z1 = z0 + uz * t_end
+    m = _particle_mass_gev_from_pdg(pdg)
+    ke = max(0.0, math.sqrt(p_mag * p_mag + m * m) - m)
+
+    return {
+        "trackId": int(_as_float(_mc_member(mp, ["m_trackIndex"], -1), -1)),
+        "pdg": pdg,
+        "p": p_mag,
+        "kineticEnergy": ke,
+        "mother": int(_as_float(_mc_member(mp, ["m_mother"], -1), -1)),
+        "motherPdg": None,
+        "pos": [[x0, y0, z0], [x1, y1, z1]],
+        "mode": "mc_neutrino",
+        "truthPidSelectable": True,
+        "color": "0x9fa8da",
+    }
 
 
 def _build_mc_truth_polyline(mp, mdc_rmax_mm=810.0, mdc_zmax_mm=1450.0):
@@ -1443,6 +1527,17 @@ def convert_rec_to_event(rec_path, entry_idx=0):
             for mp in mc_col:
                 track = _build_mc_truth_polyline(mp)
                 if track is None:
+                    nu = _build_mc_truth_neutrino_ray(mp)
+                    if nu is not None:
+                        mother_idx = int(nu.get("mother", -1))
+                        mother_pdg = mc_meta_by_tid.get(mother_idx, {}).get("pdg")
+                        # Keep neutrinos except those from K/pi/mu decays.
+                        if _mother_is_charged_pion_or_kaon(mother_pdg):
+                            pass
+                        elif _mother_is_muon(mother_pdg):
+                            pass
+                        else:
+                            mc_tracks.append(nu)
                     ph = _build_mc_truth_photon_cluster(mp)
                     if ph is not None:
                         mc_truth_photons.append(ph)

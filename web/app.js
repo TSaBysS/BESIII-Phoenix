@@ -15,7 +15,7 @@ import {
   applyOpacityToNamedGeometry, adjustPhoenixCamera, phoenixLastError,
 } from "./loader.js";
 import {
-  buildCustomEventOverlay, trackCandidateCache, clearTrackCandidateCache,
+  buildCustomEventOverlay, clearCustomEventOverlay, trackCandidateCache, clearTrackCandidateCache,
 } from "./event-renderer.js";
 import {
   interactionState, init as initPid, scheduleBindTrackInteractions,
@@ -365,6 +365,8 @@ function clearEventData() {
   cachedEventsData    = null;
   currentOverlayGroup = null;
   clearTrackCandidateCache();
+  interactionState.hoveredTrackId = null;
+  interactionState.selectedTrackId = null;
   if (eventSelectEl)    { eventSelectEl.innerHTML = ""; eventSelectEl.style.display = "none"; }
   updateEventNavButtons();
   if (btnClearEventEl)  btnClearEventEl.style.display = "none";
@@ -372,10 +374,11 @@ function clearEventData() {
   if (btnTruthModeEl)   btnTruthModeEl.style.display  = "none";
   setImportStatus("事例已清空，可重新导入");
   setStatus("探测器几何已加载，等待导入事例", "warn");
-  // Remove overlay objects from the scene via an empty rebuild.
+  // Fade out event overlay smoothly without resetting geometry.
   if (currentEventDisplay) {
-    buildCustomEventOverlay(currentEventDisplay, {}, "", false, false, null).catch(() => {});
+    clearCustomEventOverlay(currentEventDisplay, { animate: true, durationMs: 260 }).catch(() => {});
   }
+  refreshTrackSelectionVisuals();
   renderTrackInfoPanel(null);
   hideTrackHoverTip();
 }

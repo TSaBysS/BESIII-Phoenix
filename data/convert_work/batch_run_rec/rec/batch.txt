@@ -1,0 +1,37 @@
+#include "$RAWDATACNVROOT/share/ReadRawDatajobOptions.txt"
+#include "$TRIGMAKERALGROOT/share/jobOptions_TrigMakerAlg.txt"
+#include "$OFFLINEEVENTLOOPMGRROOT/share/OfflineEventLoopMgr_Option.txt"
+#include "$CALIBSVCROOT/share/job-CalibData.txt"
+#include "$MAGNETICFIELDROOT/share/MagneticField.txt"
+#include "$ESTIMEALGROOT/share/job_EsTimeAlg.txt"
+// PAT+TSF+HOUGH method for MDC reconstruction
+#include "$MDCHOUGHFINDERROOT/share/jobOptions_MdcPatTsfHoughRec.txt" 
+
+#include "$KALFITALGROOT/share/job_kalfit_numf_data.txt"
+#include "$MDCDEDXALGROOT/share/job_dedx_all.txt"
+#include "$TRKEXTALGROOT/share/TrkExtAlgOption.txt"
+#include "$TOFRECROOT/share/jobOptions_TofRec_Data.txt"
+#include "$TOFENERGYRECROOT/share/TofEnergyRecOptions_Data.txt"
+#include "$EMCRECROOT/share/EmcRecOptions.txt"
+#include "$EMCTIMERECROOT/share/EmcTimeRecOptions.txt"
+#include "$MUCRECALGROOT/share/jobOptions_MucRec.txt"
+#include "$HLTMAKERALGROOT/share/jobOptions_HltMakerAlg.txt"
+#include "$EVENTASSEMBLYROOT/share/EventAssembly.txt"
+#include "$PRIMARYVERTEXALGROOT/share/jobOptions_kalman.txt"
+#include "$VEEVERTEXALGROOT/share/jobOptions_veeVertex.txt"
+#include "$EVENTPRESELECTROOT/share/jobOptions_EventPreSelect.txt"
+#include "$CALIBSVCROOT/share/calibConfig_rec_data.txt"
+
+MessageSvc.OutputLevel= 5; 
+RawDataInputSvc.InputFiles={"/afs/ihep.ac.cn/users/y/yanjiazhen/besfs5/geant4/tutorial/BESIII_PhoenixCheck/data/convert_work/batch_run_rec/raw/10266_5291536.raw","/afs/ihep.ac.cn/users/y/yanjiazhen/besfs5/geant4/tutorial/BESIII_PhoenixCheck/data/convert_work/batch_run_rec/raw/10421_1483873.raw","/afs/ihep.ac.cn/users/y/yanjiazhen/besfs5/geant4/tutorial/BESIII_PhoenixCheck/data/convert_work/batch_run_rec/raw/10816_2523949.raw","/afs/ihep.ac.cn/users/y/yanjiazhen/besfs5/geant4/tutorial/BESIII_PhoenixCheck/data/convert_work/batch_run_rec/raw/10769_5135321.raw","/afs/ihep.ac.cn/users/y/yanjiazhen/besfs5/geant4/tutorial/BESIII_PhoenixCheck/data/convert_work/batch_run_rec/raw/10464_3104330.raw","/afs/ihep.ac.cn/users/y/yanjiazhen/besfs5/geant4/tutorial/BESIII_PhoenixCheck/data/convert_work/batch_run_rec/raw/10727_1984269.raw","/afs/ihep.ac.cn/users/y/yanjiazhen/besfs5/geant4/tutorial/BESIII_PhoenixCheck/data/convert_work/batch_run_rec/raw/10273_5849143.raw","/afs/ihep.ac.cn/users/y/yanjiazhen/besfs5/geant4/tutorial/BESIII_PhoenixCheck/data/convert_work/batch_run_rec/raw/10705_5245497.raw","/afs/ihep.ac.cn/users/y/yanjiazhen/besfs5/geant4/tutorial/BESIII_PhoenixCheck/data/convert_work/batch_run_rec/raw/10422_1558119.raw"};
+
+EventPreSelect.WriteDst=true;
+WriteDst.digiRootOutputFile="../outputs/batch.dst";
+
+EventPreSelect.WriteRec=true;
+WriteRec.digiRootOutputFile="../outputs/batch.rec";
+
+EventCnvSvc.digiRootOutputFile="../outputs/batch.digi";
+
+ApplicationMgr.EvtMax= -1;
+

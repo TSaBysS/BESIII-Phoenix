@@ -11,6 +11,7 @@
 5. [Rec Track 是如何画的](#5-rec-track-是如何画的)
 6. [坐标约定](#6-坐标约定)
 7. [PID 具体做法（补充）](#7-pid-具体做法补充)
+8. [MDC/EMC/TOF/MUC Hit 是如何画的](#8-mdcemctofmuc-hit-是如何画的)
 
 ---
 
@@ -277,6 +278,103 @@ PID 功能由 `web/pid-tools.js`（算法与格式化）和 `web/pid-interaction
 - 当前 PID 面板面向 **重建轨迹**；MC truth 轨迹本身不做 PID 拟合
 - PID 融合 dE/dx + TOF + EMC 信息；若 TOF/EMC 缺失则主要退化为 dE/dx 主导。若 dE/dx 也缺失，前端仅能显示几何/运动学信息
 - PID 面板面向重建稳定轨迹（stable），并可附加显示其 MC truth 几何匹配信息。
+
+---
+
+## 8. MDC/EMC/TOF/MUC Hit 是如何画的
+
+这一节说明从 REC 数据到浏览器可视化的完整链路：  
+`prepare_events.py` 负责把 ROOT 分支解码为 `Hits` JSON；`event-renderer.js` 负责把这些 `Hits` 转成 Three.js 几何对象并叠加到探测器上。
+
+### 8.1 通用渲染约定
+
+- 事件数据在 JSON 中使用 mm；前端统一乘 `EVENT_GLOBAL_R_SCALE = 0.1` 再放入场景。
+- Hit 覆盖层材质统一 `depthTest: false`，保证不被几何遮挡。
+- 通过 `renderOrder` 控制层级：MDC/EMC hit 通常在 1000 左右，TOF/MUC 略低（约 995/992）。
+
+### 8.2 MDC hit（REC MdcHit）
+
+#### 数据解码（`prepare_events.py`）
+
+- 来源：`TRecEvent/m_recMdcHitCol`。
+- `m_mdcid` 用 `decode_mdcid()` 解码为 `(layer, wire)`。
+- 位置由 `mdc_hit_xyz_from_id(layer, wire, zhit)` 计算，其中 `zhit = m_zhit * LENGTH_SCALE`（cm→mm）。
+  - 优先使用 `Mdc_approx.gdml` 中解析出的层半径和导线模板。
+  - stereo 层按 `z` 位置加入扭角修正（`_stereo_twist_by_layer`），因此同一根导线不同 z 的横向位置会变化。
+- 同时计算导线方向 `wireDir`（`mdc_wire_dir`）和导线类型 `wireType`（axial/stereo），并写入 `adc/tdc/driftT/doca/lr` 等原始信息。
+
+#### 前端绘制（`event-renderer.js`）
+
+- 每个 MDC hit 画为沿 `wireDir` 的短发光线段（`Line`）：
+  - 颜色固定 BesVis 风格红色 `0xff4d4d`。
+  - 线段长度和透明度随 `adc` 归一化值增强，stereo 比 axial 更长更亮。
+- stereo 命中额外加一个小圆锥（`ConeGeometry`）表示导线方向感。
+- 在线段末端再叠加一个发光球（`SphereGeometry`）做“击中头部”高亮。
+- `userData.kind` 分别标记为 `mdc_hit_fire / mdc_hit_cone / mdc_hit_bubble`，便于后续交互或调试筛选。
+
+### 8.3 EMC hit（REC EmcHit）
+
+#### 数据解码（`prepare_events.py`）
+
+- 来源：`TRecEvent/m_recEmcHitCol`。
+- `m_cellId` 用 `decode_emcid()` 解码为 `(part, theta, phi)`。
+- 对桶部沿用 BesVis 约定：`part == 1` 时执行 `theta = 43 - theta`（环号方向翻转）。
+- 输出字段以晶体索引和能量为主：`cellId/part/theta/phi/energy/time`。
+
+#### 前端绘制（`event-renderer.js`）
+
+- 先按 `cellId` 合并同晶体多次击中并累加能量。
+- 再按 `(part, theta, phi)` 做几何近似定位：
+  - 桶部：按 `120 x 44` 网格投影到 EMC 桶壳半径附近。
+  - 端盖：按 ring（0–5）与对应 `nPhi`（64/80/96）投影到 ±z 端盖。
+- 每个晶体 hit 画为红色半透明盒子（`BoxGeometry`，`0xff2b2b`），不透明度按 `energy / emax` 缩放。
+- 这是“晶体命中覆盖层”，与 EMC shower（球状径向 glow）是两套对象，前者反映晶体触发，后者反映重建簇。
+
+### 8.4 TOF hit（REC TofHit）
+
+#### 数据解码（`prepare_events.py`）
+
+- 来源：`TRecEvent/m_recTofTrackCol`（兼容 `TDstEvent/m_tofTrackCol`）。
+- 先用 `m_status` 过滤：只保留 counter（`is_tof_counter`）。
+- 通过 `is_tof_barrel(status)` 分桶部/端盖，结合 `m_tofID` 得到 `layer/scin/part`。
+- 击中位置使用参数化几何近似：
+  - 桶部：`r = 810/860 mm`（内/外层），`z` 来自 `m_zrhit`（并裁剪到 ±1200 mm）。
+  - 端盖：`r = 760 mm`，`z = ±1280 mm`。
+- 另外写入近似尺寸 `size=[sx,sy,sz]` 供前端直接画体素。
+
+#### 前端绘制（`event-renderer.js`）
+
+- 每个 TOF hit 画一个半透明盒子（`BoxGeometry`），中心在 `pos`，尺寸取 `size` 并乘全局缩放。
+- 颜色按部位区分：
+  - 桶部（`part=1`）：青色 `0x4dd0e1`
+  - 端盖（`part=0/2`）：橙色 `0xffb74d`
+- 盒子朝向通过 `lookAt(0,0,z)` 与径向对齐，作为“被击中的闪烁体块”视觉提示。
+
+### 8.5 MUC hit（REC MucHit）
+
+#### 数据解码（`prepare_events.py`）
+
+- 来源：`TRecEvent/m_recMucTrackCol` 的 `m_vecHits`（strip intId 列表），辅以 `TDigiEvent/m_mucDigiCol` 的 `m_timeChannel`。
+- `mucID` 由 `decode_mucid()` 解码为 `(part, seg, gap, strip)`。
+- 空间信息优先来自 `data/views/muc_strip_map.json`：
+  - `_resolve_muc_row()` 先精确 key 匹配 `P{part}S{seg}G{gap}R{strip}`。
+  - 若不命中，桶部尝试 seg 折叠映射并做最近 strip 回退。
+- 若 strip map 不可用，使用桶部/端盖参数化近似坐标（`posSource = "approx"`）。
+- 输出包含完整刚体基向量 `basisX/basisY/basisZ` 与尺寸 `size`，用于前端精确摆放条带体素。
+
+#### 前端绘制（`event-renderer.js`）
+
+- 每个 MUC hit 画绿色薄板盒子（`BoxGeometry`，`0x81c784`，半透明）。
+- 若 `basisX/Y/Z` 存在且合法，直接构造旋转矩阵设置姿态；否则回退到 `lookAt(0,0,z)`。
+- 在没有加载 MUC 几何对象时，会做一次半径/轴向 clamp，避免条带飞出可视范围。
+- `userData.kind = "muc_hit_strip"`，便于后续点击拾取与调试。
+
+### 8.6 与 BesVis 一致性和当前近似
+
+- **MDC**：遵循“wire 几何 + zhit”的命中定位思想，颜色/风格也与 BesVis fired-wire 红色一致；但 stereo 扭角仍是近似模型。
+- **EMC**：hit 使用晶体索引驱动的规则化体素覆盖，不是逐块精确楔形晶体布尔体。
+- **TOF**：使用桶部/端盖参数化半径和尺寸，强调可读性与稳定显示。
+- **MUC**：优先走 `muc_strip_map.json` 的真实条带中心与姿态；缺图时才回退近似参数化。
 
 ---
 

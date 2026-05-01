@@ -27,6 +27,76 @@ async function getThree() {
 export let trackCandidateCache = [];
 export function clearTrackCandidateCache() { trackCandidateCache = []; }
 
+function disposeObject3D(root) {
+  if (!root) return;
+  root.traverse?.((obj) => {
+    if (obj?.geometry?.dispose) obj.geometry.dispose();
+    const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
+    mats.forEach((m) => m?.dispose?.());
+  });
+}
+
+function setOverlayOpacity(root, alpha) {
+  if (!root) return;
+  const a = Math.max(0, Math.min(1, Number(alpha) || 0));
+  root.traverse?.((obj) => {
+    const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
+    mats.forEach((mat) => {
+      if (!mat) return;
+      const base = Number.isFinite(Number(mat.userData?.__baseOpacity))
+        ? Number(mat.userData.__baseOpacity)
+        : Number(mat.opacity ?? 1.0);
+      if (!mat.userData) mat.userData = {};
+      mat.userData.__baseOpacity = base;
+      mat.transparent = true;
+      mat.opacity = Math.max(0, Math.min(1, base * a));
+      mat.needsUpdate = true;
+    });
+  });
+}
+
+/**
+ * Remove event overlay from scene, optionally with fade-out animation.
+ */
+export async function clearCustomEventOverlay(eventDisplay, options = {}) {
+  const tm = eventDisplay?.getThreeManager?.();
+  const sm = tm?.getSceneManager?.();
+  const scene = sm?.getScene?.();
+  if (!scene) return { removed: false };
+  const overlayName = "BESIII_REC_EVENT_OVERLAY";
+  const old = scene.getObjectByName(overlayName);
+  if (!old) {
+    clearTrackCandidateCache();
+    return { removed: false };
+  }
+
+  const animate = Boolean(options?.animate);
+  const durationMs = Math.max(0, Number(options?.durationMs ?? 220));
+  if (animate && durationMs > 0) {
+    const start = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    const step = (now) => {
+      const t = Math.max(0, Math.min(1, (now - start) / durationMs));
+      // Ease-out cubic for smoother disappearance.
+      const eased = 1 - Math.pow(t, 3);
+      setOverlayOpacity(old, eased);
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        scene.remove(old);
+        disposeObject3D(old);
+      }
+    };
+    requestAnimationFrame(step);
+    await new Promise((resolve) => setTimeout(resolve, durationMs + 16));
+  } else {
+    scene.remove(old);
+    disposeObject3D(old);
+  }
+
+  clearTrackCandidateCache();
+  return { removed: true };
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 export function scaleEventPoint(p) {
@@ -83,8 +153,14 @@ export async function buildCustomEventOverlay(
   selectedEventKey = "",
   showMcTruth = false,
 ) {
+  const tm    = eventDisplay?.getThreeManager?.();
+  const sm    = tm?.getSceneManager?.();
+  const scene = sm?.getScene?.();
+  if (!scene) return { group: null, count: 0 };
+
   const allKeys  = Object.keys(eventsData || {});
   const eventKey = allKeys.includes(selectedEventKey) ? selectedEventKey : allKeys[0];
+  await clearCustomEventOverlay(eventDisplay, { animate: false });
   if (!eventKey) return { group: null, count: 0 };
 
   const ev        = eventsData[eventKey] || {};
@@ -104,20 +180,12 @@ export async function buildCustomEventOverlay(
     ? ev.CaloClusters["MC Truth Photon"] : [];
   const clusters = [...recShowers, ...truthPhotons];
 
-  const tm    = eventDisplay?.getThreeManager?.();
-  const sm    = tm?.getSceneManager?.();
-  const scene = sm?.getScene?.();
-  if (!scene) return { group: null, count: 0 };
-
   const THREE = await getThree();
 
   const overlayName = "BESIII_REC_EVENT_OVERLAY";
-  const old = scene.getObjectByName(overlayName);
-  if (old) scene.remove(old);
-
   const group = new THREE.Group();
   group.name  = overlayName;
-  trackCandidateCache = [];
+  clearTrackCandidateCache();
   let count = 0;
 
   const emcRadiusHint = estimateEmcRadius(scene, THREE) ?? 95.0;
