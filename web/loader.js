@@ -199,6 +199,12 @@ function hideEmcContainerShells(eventDisplay) {
       if (!hideHints.some((k) => n.includes(k))) return;
       // Do not hide the full node; parent containers may own crystal children.
       // Only suppress the container shell material itself.
+      if (obj?.material) {
+        // Phoenix/ROOT imports may share one material instance across many meshes.
+        // Clone on targeted container nodes to avoid turning crystals transparent too.
+        if (Array.isArray(obj.material)) obj.material = obj.material.map((m) => (m?.clone ? m.clone() : m));
+        else if (obj.material?.clone) obj.material = obj.material.clone();
+      }
       const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
       mats.forEach((mat) => {
         if (!mat) return;
