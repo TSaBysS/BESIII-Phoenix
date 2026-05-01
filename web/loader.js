@@ -203,7 +203,9 @@ function hideEmcContainerShells(eventDisplay) {
         if (!mat) return;
         mat.transparent = true;
         mat.opacity = 0.0;
+        mat.depthTest = false;
         mat.depthWrite = false;
+        obj.renderOrder = -1000;
         mat.needsUpdate = true;
       });
     });
@@ -239,15 +241,56 @@ export function refreshEmcDebugInfo(eventDisplay) {
       logicalBscWorldVisible: 0,
       meshes: 0,
       visibleMeshes: 0,
+      emcLikeObjects: 0,
+      emcLikeMeshes: 0,
+      emcLikeVisibleMeshes: 0,
+      worldLikeObjects: 0,
+      worldLikeVisible: 0,
+      crystalLikeObjects: 0,
+      crystalLikeVisible: 0,
+      casingLikeObjects: 0,
+      casingLikeVisible: 0,
+      transparentMaterials: 0,
+      opaqueMaterials: 0,
+      zeroOpacityMaterials: 0,
+      hiddenObjects: 0,
     };
     geometries.traverse?.((obj) => {
       info.totalObjects += 1;
       if (obj?.visible !== false) info.visibleObjects += 1;
+      else info.hiddenObjects += 1;
       if (obj?.isMesh) {
         info.meshes += 1;
         if (obj?.visible !== false) info.visibleMeshes += 1;
       }
       const n = String(obj?.name || "").toLowerCase();
+      const objLooksEmc = n.includes("emc") || n.includes("bsc") || n.includes("end");
+      if (objLooksEmc) {
+        info.emcLikeObjects += 1;
+        if (obj?.isMesh) {
+          info.emcLikeMeshes += 1;
+          if (obj?.visible !== false) info.emcLikeVisibleMeshes += 1;
+        }
+      }
+      if (n.includes("world")) {
+        info.worldLikeObjects += 1;
+        if (obj?.visible !== false) info.worldLikeVisible += 1;
+      }
+      if (n.includes("crystal")) {
+        info.crystalLikeObjects += 1;
+        if (obj?.visible !== false) info.crystalLikeVisible += 1;
+      }
+      if (n.includes("casing")) {
+        info.casingLikeObjects += 1;
+        if (obj?.visible !== false) info.casingLikeVisible += 1;
+      }
+      const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
+      mats.forEach((mat) => {
+        if (!mat) return;
+        if (mat.transparent) info.transparentMaterials += 1;
+        else info.opaqueMaterials += 1;
+        if (Number(mat.opacity) <= 0.001) info.zeroOpacityMaterials += 1;
+      });
       if (!n) return;
       if (n === "emc" || n.includes("logicalemc") || n.includes("solidemc")) info.emcRootHits += 1;
       if (n.includes("logicalendcrystal_")) {
@@ -417,8 +460,7 @@ export async function loadPhoenix(viewerEl) {
     // EMC endcaps can disappear when source normals are flipped; force double-sided.
     await forceDoubleSidedForNamedGeometry(eventDisplay, "emc");
     applyDetectorOpacityFromUi(eventDisplay);
-    // TEMP: disable container suppression while debugging EMC visibility.
-    // hideEmcContainerShells(eventDisplay);
+    hideEmcContainerShells(eventDisplay);
     refreshEmcDebugInfo(eventDisplay);
     await adjustPhoenixCamera(eventDisplay);
     return eventDisplay;
@@ -433,8 +475,7 @@ export async function loadPhoenix(viewerEl) {
     }
     await forceDoubleSidedForNamedGeometry(apiObj, "emc");
     applyDetectorOpacityFromUi(apiObj);
-    // TEMP: disable container suppression while debugging EMC visibility.
-    // hideEmcContainerShells(apiObj);
+    hideEmcContainerShells(apiObj);
     refreshEmcDebugInfo(apiObj);
     return apiObj;
   }
