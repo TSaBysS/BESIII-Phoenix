@@ -83,10 +83,10 @@ export function getGeometryList(view = getSelectedView()) {
 export let phoenixCtor = null;
 export let phoenixApi  = null;
 export let phoenixLastError = "";
-export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v6";
+export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v8";
 let lastEmcDebugInfo = null;
 
-const GEOMETRY_CACHE_BUST = "geomv6";
+const GEOMETRY_CACHE_BUST = "geomv8";
 
 function withGeometryCacheBust(path) {
   if (!path) return path;
@@ -195,6 +195,35 @@ async function forceDoubleSidedForNamedGeometry(eventDisplay, objectName) {
     });
   } catch (err) {
     console.warn(`Force DoubleSide for ${objectName} skipped:`, err);
+  }
+}
+
+function normalizeEmcEndcapAppearance(eventDisplay) {
+  try {
+    const tm = eventDisplay?.getThreeManager?.();
+    const sm = tm?.getSceneManager?.();
+    const geometries = sm?.getGeometries?.() || sm?.getScene?.();
+    if (!geometries) return;
+    geometries.traverse?.((obj) => {
+      const n = String(obj?.name || "").toLowerCase();
+      if (!n) return;
+      const isEndCrystal = n.includes("logicalendcrystal_");
+      const isEndCasing = n.includes("logicalendcasing_");
+      if (!isEndCrystal && !isEndCasing) return;
+      const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
+      mats.forEach((mat) => {
+        if (!mat) return;
+        if (typeof mat.color?.setHex === "function") {
+          mat.color.setHex(isEndCrystal ? 0x4a78d6 : 0x5d6f9f);
+        }
+        mat.transparent = true;
+        mat.opacity = isEndCrystal ? 0.34 : 0.16;
+        mat.depthWrite = false;
+        mat.needsUpdate = true;
+      });
+    });
+  } catch (err) {
+    console.warn("Normalize EMC endcap appearance skipped:", err);
   }
 }
 
@@ -508,6 +537,7 @@ export async function loadPhoenix(viewerEl) {
     }
     // EMC endcaps can disappear when source normals are flipped; force double-sided.
     await forceDoubleSidedForNamedGeometry(eventDisplay, "emc");
+    normalizeEmcEndcapAppearance(eventDisplay);
     applyDetectorOpacityFromUi(eventDisplay);
     // Temporarily disable container suppression; it can interfere with
     // shared materials in some Phoenix builds and mask the root issue.
@@ -525,6 +555,7 @@ export async function loadPhoenix(viewerEl) {
       );
     }
     await forceDoubleSidedForNamedGeometry(apiObj, "emc");
+    normalizeEmcEndcapAppearance(apiObj);
     applyDetectorOpacityFromUi(apiObj);
     // Temporarily disable container suppression; it can interfere with
     // shared materials in some Phoenix builds and mask the root issue.
