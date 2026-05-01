@@ -316,6 +316,24 @@
       #trackInfoPanel.flash {
         box-shadow: 0 0 0 2px rgba(180, 195, 215, 0.9), 0 0 18px rgba(180, 195, 215, 0.45);
       }
+      #emcDebugPanel {
+        position: fixed;
+        right: 12px;
+        bottom: 12px;
+        z-index: 41;
+        width: min(460px, 46vw);
+        max-height: 40vh;
+        overflow: auto;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(148, 186, 255, 0.45);
+        background: rgba(10, 18, 32, 0.58);
+        color: #cfe3ff;
+        font-size: 11px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      }
       #bes3LogoBadge {
         position: fixed;
         right: 14px;
@@ -406,6 +424,7 @@
       <button id="btnClearEvent">&#x2715; 清空事例</button>
     </div>
     <div id="dropOverlay">&#8613; 松开以导入事例 JSON</div>
+    <div id="emcDebugPanel">EMC debug: waiting...</div>
     <div id="bes3LogoBadge">
       <img src="./assets/bes3-logo-rotated.png" alt="BESIII logo" />
     </div>

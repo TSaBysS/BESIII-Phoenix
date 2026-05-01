@@ -13,6 +13,7 @@ import {
   getGeometryList, assembledComponents,
   loadPhoenix, loadJsrootGeometry, loadThreeFallback,
   applyOpacityToNamedGeometry, adjustPhoenixCamera, phoenixLastError,
+  getLastEmcDebugInfo, refreshEmcDebugInfo,
 } from "./loader.js";
 import {
   buildCustomEventOverlay, clearCustomEventOverlay, trackCandidateCache, clearTrackCandidateCache,
@@ -52,6 +53,7 @@ const btnEventNextEl      = document.getElementById("btnEventNext");
 const searchRunEl         = document.getElementById("searchRun");
 const searchRecEl         = document.getElementById("searchRec");
 const btnEventJumpEl      = document.getElementById("btnEventJump");
+const emcDebugPanelEl     = document.getElementById("emcDebugPanel");
 
 // ── runtime state ─────────────────────────────────────────────────────────────
 
@@ -66,6 +68,7 @@ let cachedEventsData     = null;
 let currentOverlayGroup  = null;
 let loaderProgressValue  = 10;
 let importInProgress     = false;
+let emcDebugTimer        = null;
 
 // ── loader progress ───────────────────────────────────────────────────────────
 
@@ -97,6 +100,38 @@ function setStatus(text, klass) {
   if (klass === "ok") { setLoaderProgress(92); }
   else if (klass === "warn" || klass === "err") { setLoaderProgress(96); }
   else { setLoaderProgress(Math.min(92, loaderProgressValue + 8)); }
+}
+
+function updateEmcDebugPanel() {
+  if (!emcDebugPanelEl) return;
+  if (!currentEventDisplay) {
+    emcDebugPanelEl.textContent = "EMC debug: eventDisplay unavailable";
+    return;
+  }
+  const info = /** @type {any} */ (refreshEmcDebugInfo(currentEventDisplay) || getLastEmcDebugInfo());
+  if (!info || info.ready === false) {
+    emcDebugPanelEl.textContent = `EMC debug: not ready (${info?.reason || "unknown"})`;
+    return;
+  }
+  const lines = [
+    "EMC debug (temporary)",
+    `total/visible objs: ${info.totalObjects}/${info.visibleObjects}`,
+    `mesh visible: ${info.visibleMeshes}/${info.meshes}`,
+    `emc root hits: ${info.emcRootHits}`,
+    `EndCrystal visible: ${info.logicalEndCrystalVisible}/${info.logicalEndCrystal}`,
+    `EndCasing visible: ${info.logicalEndCasingVisible}/${info.logicalEndCasing}`,
+    `BSCCasing visible: ${info.logicalBscCasingVisible}/${info.logicalBscCasing}`,
+    `EndWorld visible: ${info.logicalEndWorldVisible}/${info.logicalEndWorld}`,
+    `BSCWorld visible: ${info.logicalBscWorldVisible}/${info.logicalBscWorld}`,
+    `updated: ${new Date(info.timestamp || Date.now()).toLocaleTimeString()}`,
+  ];
+  emcDebugPanelEl.textContent = lines.join("\n");
+}
+
+function startEmcDebugTicker() {
+  if (emcDebugTimer) window.clearInterval(emcDebugTimer);
+  updateEmcDebugPanel();
+  emcDebugTimer = window.setInterval(updateEmcDebugPanel, 1200);
 }
 
 // ── opacity slider UI setup ───────────────────────────────────────────────────
@@ -434,6 +469,7 @@ function setupImportUi() {
 
 async function doLoadPhoenix() {
   currentEventDisplay = await loadPhoenix(viewerEl);
+  updateEmcDebugPanel();
   scheduleBindTrackInteractions();
   setStatus("探测器几何已加载，等待导入事例", "ok");
   setImportStatus("几何就绪，可以导入事例 JSON ↑");
@@ -483,6 +519,7 @@ async function boot() {
   setupImportUi();
   setupEventNavigationUi();
   initPidModule();
+  startEmcDebugTicker();
 
   try {
     await doLoadPhoenix();

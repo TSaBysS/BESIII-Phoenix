@@ -71,9 +71,11 @@ export function getGeometryList(view = getSelectedView()) {
 export let phoenixCtor = null;
 export let phoenixApi  = null;
 export let phoenixLastError = "";
+let lastEmcDebugInfo = null;
 
 export function setPhoenixCtor(v) { phoenixCtor = v; }
 export function setPhoenixApi(v)  { phoenixApi  = v; }
+export function getLastEmcDebugInfo() { return lastEmcDebugInfo; }
 
 // ── geometry opacity helpers ──────────────────────────────────────────────────
 
@@ -206,6 +208,73 @@ function hideEmcContainerShells(eventDisplay) {
     });
   } catch (err) {
     console.warn("Hide EMC container shells skipped:", err);
+  }
+}
+
+export function refreshEmcDebugInfo(eventDisplay) {
+  try {
+    const tm = eventDisplay?.getThreeManager?.();
+    const sm = tm?.getSceneManager?.();
+    const geometries = sm?.getGeometries?.() || sm?.getScene?.();
+    if (!geometries) {
+      lastEmcDebugInfo = { ready: false, reason: "no-geometries" };
+      return lastEmcDebugInfo;
+    }
+    const info = {
+      ready: true,
+      timestamp: Date.now(),
+      totalObjects: 0,
+      visibleObjects: 0,
+      emcRootHits: 0,
+      logicalEndCrystal: 0,
+      logicalEndCrystalVisible: 0,
+      logicalEndCasing: 0,
+      logicalEndCasingVisible: 0,
+      logicalBscCasing: 0,
+      logicalBscCasingVisible: 0,
+      logicalEndWorld: 0,
+      logicalEndWorldVisible: 0,
+      logicalBscWorld: 0,
+      logicalBscWorldVisible: 0,
+      meshes: 0,
+      visibleMeshes: 0,
+    };
+    geometries.traverse?.((obj) => {
+      info.totalObjects += 1;
+      if (obj?.visible !== false) info.visibleObjects += 1;
+      if (obj?.isMesh) {
+        info.meshes += 1;
+        if (obj?.visible !== false) info.visibleMeshes += 1;
+      }
+      const n = String(obj?.name || "").toLowerCase();
+      if (!n) return;
+      if (n === "emc" || n.includes("logicalemc") || n.includes("solidemc")) info.emcRootHits += 1;
+      if (n.includes("logicalendcrystal_")) {
+        info.logicalEndCrystal += 1;
+        if (obj?.visible !== false) info.logicalEndCrystalVisible += 1;
+      }
+      if (n.includes("logicalendcasing_")) {
+        info.logicalEndCasing += 1;
+        if (obj?.visible !== false) info.logicalEndCasingVisible += 1;
+      }
+      if (n.includes("logicalbsccasing")) {
+        info.logicalBscCasing += 1;
+        if (obj?.visible !== false) info.logicalBscCasingVisible += 1;
+      }
+      if (n.includes("logicalendworld") || n.includes("solidendworld")) {
+        info.logicalEndWorld += 1;
+        if (obj?.visible !== false) info.logicalEndWorldVisible += 1;
+      }
+      if (n.includes("logicalbscworld") || n.includes("solidbscworld")) {
+        info.logicalBscWorld += 1;
+        if (obj?.visible !== false) info.logicalBscWorldVisible += 1;
+      }
+    });
+    lastEmcDebugInfo = info;
+    return info;
+  } catch (err) {
+    lastEmcDebugInfo = { ready: false, reason: String(err?.message || err || "unknown") };
+    return lastEmcDebugInfo;
   }
 }
 
@@ -348,6 +417,7 @@ export async function loadPhoenix(viewerEl) {
     await forceDoubleSidedForNamedGeometry(eventDisplay, "emc");
     applyDetectorOpacityFromUi(eventDisplay);
     hideEmcContainerShells(eventDisplay);
+    refreshEmcDebugInfo(eventDisplay);
     await adjustPhoenixCamera(eventDisplay);
     return eventDisplay;
   }
@@ -362,6 +432,7 @@ export async function loadPhoenix(viewerEl) {
     await forceDoubleSidedForNamedGeometry(apiObj, "emc");
     applyDetectorOpacityFromUi(apiObj);
     hideEmcContainerShells(apiObj);
+    refreshEmcDebugInfo(apiObj);
     return apiObj;
   }
 
