@@ -71,7 +71,7 @@ export function getGeometryList(view = getSelectedView()) {
 export let phoenixCtor = null;
 export let phoenixApi  = null;
 export let phoenixLastError = "";
-export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v3";
+export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v4";
 let lastEmcDebugInfo = null;
 
 export function setPhoenixCtor(v) { phoenixCtor = v; }
