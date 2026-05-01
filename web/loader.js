@@ -185,18 +185,20 @@ function hideEmcContainerShells(eventDisplay) {
     const sm = tm?.getSceneManager?.();
     const geometries = sm?.getGeometries?.() || sm?.getScene?.();
     if (!geometries) return;
-    const hideHints = [
+    const hideExactNames = new Set([
       "logicalendworld",
       "logicalbscworld",
       "solidendworld",
       "solidbscworld",
       "solidbscworld0",
-    ];
+    ]);
     geometries.traverse?.((obj) => {
       const n = String(obj?.name || "").toLowerCase();
       if (!n) return;
       if (n === "emc" || n === "logicalemc" || n === "solidemc") return;
-      if (!hideHints.some((k) => n.includes(k))) return;
+      // Use exact-name targeting only. Broad includes() can accidentally match
+      // many crystal meshes in some Phoenix exports.
+      if (!hideExactNames.has(n)) return;
       // Do not hide the full node; parent containers may own crystal children.
       // Only suppress the container shell material itself.
       if (obj?.material) {
@@ -262,6 +264,7 @@ export function refreshEmcDebugInfo(eventDisplay) {
       opaqueMaterials: 0,
       zeroOpacityMaterials: 0,
       hiddenObjects: 0,
+      zeroOpacityObjectSamples: [],
     };
     geometries.traverse?.((obj) => {
       info.totalObjects += 1;
@@ -297,7 +300,12 @@ export function refreshEmcDebugInfo(eventDisplay) {
         if (!mat) return;
         if (mat.transparent) info.transparentMaterials += 1;
         else info.opaqueMaterials += 1;
-        if (Number(mat.opacity) <= 0.001) info.zeroOpacityMaterials += 1;
+        if (Number(mat.opacity) <= 0.001) {
+          info.zeroOpacityMaterials += 1;
+          if (info.zeroOpacityObjectSamples.length < 8) {
+            info.zeroOpacityObjectSamples.push(String(obj?.name || "(no-name)"));
+          }
+        }
       });
       if (!n) return;
       if (n === "emc" || n.includes("logicalemc") || n.includes("solidemc")) info.emcRootHits += 1;

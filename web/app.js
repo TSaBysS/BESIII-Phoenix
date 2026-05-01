@@ -126,6 +126,7 @@ function updateEmcDebugPanel() {
     `world-like visible: ${show(info.worldLikeVisible)}/${show(info.worldLikeObjects)}`,
     `mat transparent/opaque: ${show(info.transparentMaterials)}/${show(info.opaqueMaterials)}`,
     `mat zero-opacity: ${show(info.zeroOpacityMaterials)}`,
+    `zero-opacity samples: ${Array.isArray(info.zeroOpacityObjectSamples) ? info.zeroOpacityObjectSamples.join(", ") : "n/a"}`,
     `hidden objs: ${show(info.hiddenObjects)}`,
     `emc root hits: ${info.emcRootHits}`,
     `EndCrystal visible: ${info.logicalEndCrystalVisible}/${info.logicalEndCrystal}`,
