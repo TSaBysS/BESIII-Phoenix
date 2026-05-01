@@ -184,18 +184,19 @@ function suppressEmcContainerVolumes(eventDisplay) {
     if (!geometries) return;
     const roots = findNamedGeometryRoots(geometries, "emc");
     if (!roots.length) return;
+    // Keep this list strict: never hide the EMC root itself.
     const hideNameHints = [
       "logicalendworld",
       "logicalbscworld",
       "solidendworld",
       "solidbscworld",
-      "solidemc",
     ];
     roots.forEach((root) => {
       root.traverse((obj) => {
         const n = String(obj?.name || "").toLowerCase();
         if (!n) return;
         if (!hideNameHints.some((k) => n.includes(k))) return;
+        if (n === "emc" || n === "logicalemc" || n === "solidemc") return;
         obj.visible = false;
       });
     });
