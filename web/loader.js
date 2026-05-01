@@ -417,7 +417,8 @@ export async function loadPhoenix(viewerEl) {
     // EMC endcaps can disappear when source normals are flipped; force double-sided.
     await forceDoubleSidedForNamedGeometry(eventDisplay, "emc");
     applyDetectorOpacityFromUi(eventDisplay);
-    hideEmcContainerShells(eventDisplay);
+    // TEMP: disable container suppression while debugging EMC visibility.
+    // hideEmcContainerShells(eventDisplay);
     refreshEmcDebugInfo(eventDisplay);
     await adjustPhoenixCamera(eventDisplay);
     return eventDisplay;
@@ -432,7 +433,8 @@ export async function loadPhoenix(viewerEl) {
     }
     await forceDoubleSidedForNamedGeometry(apiObj, "emc");
     applyDetectorOpacityFromUi(apiObj);
-    hideEmcContainerShells(apiObj);
+    // TEMP: disable container suppression while debugging EMC visibility.
+    // hideEmcContainerShells(apiObj);
     refreshEmcDebugInfo(apiObj);
     return apiObj;
   }
