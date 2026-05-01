@@ -176,6 +176,34 @@ async function forceDoubleSidedForNamedGeometry(eventDisplay, objectName) {
   }
 }
 
+function suppressEmcContainerVolumes(eventDisplay) {
+  try {
+    const tm = eventDisplay?.getThreeManager?.();
+    const sm = tm?.getSceneManager?.();
+    const geometries = sm?.getGeometries?.() || sm?.getScene?.();
+    if (!geometries) return;
+    const roots = findNamedGeometryRoots(geometries, "emc");
+    if (!roots.length) return;
+    const hideNameHints = [
+      "logicalendworld",
+      "logicalbscworld",
+      "solidendworld",
+      "solidbscworld",
+      "solidemc",
+    ];
+    roots.forEach((root) => {
+      root.traverse((obj) => {
+        const n = String(obj?.name || "").toLowerCase();
+        if (!n) return;
+        if (!hideNameHints.some((k) => n.includes(k))) return;
+        obj.visible = false;
+      });
+    });
+  } catch (err) {
+    console.warn("Suppress EMC container volumes skipped:", err);
+  }
+}
+
 // ── camera ────────────────────────────────────────────────────────────────────
 
 export async function adjustPhoenixCamera(eventDisplay) {
@@ -313,6 +341,8 @@ export async function loadPhoenix(viewerEl) {
     }
     // EMC endcaps can disappear when source normals are flipped; force double-sided.
     await forceDoubleSidedForNamedGeometry(eventDisplay, "emc");
+    // Keep EMC crystal coverage visually truthful by hiding world/container shells.
+    suppressEmcContainerVolumes(eventDisplay);
     applyDetectorOpacityFromUi(eventDisplay);
     await adjustPhoenixCamera(eventDisplay);
     return eventDisplay;
@@ -326,6 +356,7 @@ export async function loadPhoenix(viewerEl) {
       );
     }
     await forceDoubleSidedForNamedGeometry(apiObj, "emc");
+    suppressEmcContainerVolumes(apiObj);
     applyDetectorOpacityFromUi(apiObj);
     return apiObj;
   }

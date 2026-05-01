@@ -16,6 +16,11 @@
  */
 
 export const EVENT_GLOBAL_R_SCALE = 0.1;
+// Endcap EMC ring envelope estimated from Emc_approx.gdml:
+// physicalEndCasing radii are about 587..933 mm. Relative to barrel shell (~930 mm),
+// this is approximately 0.63..1.00.
+const EMC_ENDCAP_RMIN_RATIO = 0.63;
+const EMC_ENDCAP_RMAX_RATIO = 1.00;
 
 let cachedThreeModule = null;
 async function getThree() {
@@ -332,7 +337,9 @@ export async function buildCustomEventOverlay(
         const nPhi = thetaIdx < 2 ? 64.0 : thetaIdx < 4 ? 80.0 : 96.0;
         const phi  = ((phiIdx + 0.5) / nPhi) * Math.PI * 2.0;
         const ring = Math.max(0, Math.min(5, thetaIdx));
-        const rMin = rBarrel * 0.22, rMax = rBarrel * 0.95;
+        // Use endcap ring envelope instead of a too-wide generic disk.
+        const rMin = rBarrel * EMC_ENDCAP_RMIN_RATIO;
+        const rMax = rBarrel * EMC_ENDCAP_RMAX_RATIO;
         const rr   = rMin + ((ring + 0.5) / 6.0) * (rMax - rMin);
         x  = rr * Math.cos(phi); y = rr * Math.sin(phi);
         z  = (part === 0 ? -1 : 1) * (zHalf * 0.98);
