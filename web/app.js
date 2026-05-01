@@ -69,7 +69,7 @@ let currentOverlayGroup  = null;
 let loaderProgressValue  = 10;
 let importInProgress     = false;
 let emcDebugTimer        = null;
-const EMC_DEBUG_SCHEMA_EXPECT = "emc-debug-v2";
+const EMC_DEBUG_SCHEMA_EXPECT = "emc-debug-v3";
 
 // ── loader progress ───────────────────────────────────────────────────────────
 

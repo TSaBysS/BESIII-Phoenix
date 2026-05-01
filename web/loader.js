@@ -71,7 +71,7 @@ export function getGeometryList(view = getSelectedView()) {
 export let phoenixCtor = null;
 export let phoenixApi  = null;
 export let phoenixLastError = "";
-export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v2";
+export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v3";
 let lastEmcDebugInfo = null;
 
 export function setPhoenixCtor(v) { phoenixCtor = v; }
@@ -476,7 +476,9 @@ export async function loadPhoenix(viewerEl) {
     // EMC endcaps can disappear when source normals are flipped; force double-sided.
     await forceDoubleSidedForNamedGeometry(eventDisplay, "emc");
     applyDetectorOpacityFromUi(eventDisplay);
-    hideEmcContainerShells(eventDisplay);
+    // Temporarily disable container suppression; it can interfere with
+    // shared materials in some Phoenix builds and mask the root issue.
+    // hideEmcContainerShells(eventDisplay);
     refreshEmcDebugInfo(eventDisplay);
     await adjustPhoenixCamera(eventDisplay);
     return eventDisplay;
@@ -491,7 +493,9 @@ export async function loadPhoenix(viewerEl) {
     }
     await forceDoubleSidedForNamedGeometry(apiObj, "emc");
     applyDetectorOpacityFromUi(apiObj);
-    hideEmcContainerShells(apiObj);
+    // Temporarily disable container suppression; it can interfere with
+    // shared materials in some Phoenix builds and mask the root issue.
+    // hideEmcContainerShells(apiObj);
     refreshEmcDebugInfo(apiObj);
     return apiObj;
   }
