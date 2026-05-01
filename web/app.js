@@ -13,7 +13,7 @@ import {
   getGeometryList, assembledComponents,
   loadPhoenix, loadJsrootGeometry, loadThreeFallback,
   applyOpacityToNamedGeometry, adjustPhoenixCamera, phoenixLastError,
-  getLastEmcDebugInfo, refreshEmcDebugInfo,
+  getLastEmcDebugInfo, refreshEmcDebugInfo, EMC_DEBUG_SCHEMA_VERSION,
 } from "./loader.js";
 import {
   buildCustomEventOverlay, clearCustomEventOverlay, trackCandidateCache, clearTrackCandidateCache,
@@ -113,17 +113,19 @@ function updateEmcDebugPanel() {
     emcDebugPanelEl.textContent = `EMC debug: not ready (${info?.reason || "unknown"})`;
     return;
   }
+  const show = (v) => (v == null ? "n/a" : String(v));
   const lines = [
     "EMC debug (temporary)",
+    `schema: ${show(info.debugSchemaVersion)} (expect: ${EMC_DEBUG_SCHEMA_VERSION})`,
     `total/visible objs: ${info.totalObjects}/${info.visibleObjects}`,
     `mesh visible: ${info.visibleMeshes}/${info.meshes}`,
-    `emc-like mesh visible: ${info.emcLikeVisibleMeshes}/${info.emcLikeMeshes}`,
-    `crystal-like visible: ${info.crystalLikeVisible}/${info.crystalLikeObjects}`,
-    `casing-like visible: ${info.casingLikeVisible}/${info.casingLikeObjects}`,
-    `world-like visible: ${info.worldLikeVisible}/${info.worldLikeObjects}`,
-    `mat transparent/opaque: ${info.transparentMaterials}/${info.opaqueMaterials}`,
-    `mat zero-opacity: ${info.zeroOpacityMaterials}`,
-    `hidden objs: ${info.hiddenObjects}`,
+    `emc-like mesh visible: ${show(info.emcLikeVisibleMeshes)}/${show(info.emcLikeMeshes)}`,
+    `crystal-like visible: ${show(info.crystalLikeVisible)}/${show(info.crystalLikeObjects)}`,
+    `casing-like visible: ${show(info.casingLikeVisible)}/${show(info.casingLikeObjects)}`,
+    `world-like visible: ${show(info.worldLikeVisible)}/${show(info.worldLikeObjects)}`,
+    `mat transparent/opaque: ${show(info.transparentMaterials)}/${show(info.opaqueMaterials)}`,
+    `mat zero-opacity: ${show(info.zeroOpacityMaterials)}`,
+    `hidden objs: ${show(info.hiddenObjects)}`,
     `emc root hits: ${info.emcRootHits}`,
     `EndCrystal visible: ${info.logicalEndCrystalVisible}/${info.logicalEndCrystal}`,
     `EndCasing visible: ${info.logicalEndCasingVisible}/${info.logicalEndCasing}`,

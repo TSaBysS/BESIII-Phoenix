@@ -71,6 +71,7 @@ export function getGeometryList(view = getSelectedView()) {
 export let phoenixCtor = null;
 export let phoenixApi  = null;
 export let phoenixLastError = "";
+export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v2";
 let lastEmcDebugInfo = null;
 
 export function setPhoenixCtor(v) { phoenixCtor = v; }
@@ -225,6 +226,7 @@ export function refreshEmcDebugInfo(eventDisplay) {
     }
     const info = {
       ready: true,
+      debugSchemaVersion: EMC_DEBUG_SCHEMA_VERSION,
       timestamp: Date.now(),
       totalObjects: 0,
       visibleObjects: 0,
