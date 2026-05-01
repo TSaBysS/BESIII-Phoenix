@@ -196,7 +196,8 @@ function hideEmcContainerShells(eventDisplay) {
       if (!n) return;
       if (n === "emc" || n === "logicalemc" || n === "solidemc") return;
       if (!hideHints.some((k) => n.includes(k))) return;
-      obj.visible = false;
+      // Do not hide the full node; parent containers may own crystal children.
+      // Only suppress the container shell material itself.
       const mats = Array.isArray(obj?.material) ? obj.material : [obj?.material];
       mats.forEach((mat) => {
         if (!mat) return;
