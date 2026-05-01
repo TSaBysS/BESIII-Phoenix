@@ -40,11 +40,23 @@ function getSelectedView() {
 async function loadGeometryWithFallback(loader, entry) {
   try {
     await loader(withGeometryCacheBust(entry.path), entry.key);
+    if (entry.key === "emc") {
+      // Work around Phoenix branch-loss on combined EMC tree:
+      // load explicit endcap-root export as an overlay.
+      const endcapPath = "../data/views/emc_endcap.root.json";
+      await loader(withGeometryCacheBust(endcapPath), entry.key);
+    }
   } catch (err) {
     if (entry.key !== "emc") throw err;
     const fallback = "../data/views/emc_approx.root.json";
     console.warn(`EMC mesh cache load failed, fallback to ${fallback}:`, err);
     await loader(withGeometryCacheBust(fallback), entry.key);
+    const endcapPath = "../data/views/emc_endcap.root.json";
+    try {
+      await loader(withGeometryCacheBust(endcapPath), entry.key);
+    } catch (endErr) {
+      console.warn(`EMC endcap overlay load failed (${endcapPath}):`, endErr);
+    }
   }
 }
 
@@ -71,10 +83,10 @@ export function getGeometryList(view = getSelectedView()) {
 export let phoenixCtor = null;
 export let phoenixApi  = null;
 export let phoenixLastError = "";
-export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v5";
+export const EMC_DEBUG_SCHEMA_VERSION = "emc-debug-v6";
 let lastEmcDebugInfo = null;
 
-const GEOMETRY_CACHE_BUST = "geomv5";
+const GEOMETRY_CACHE_BUST = "geomv6";
 
 function withGeometryCacheBust(path) {
   if (!path) return path;

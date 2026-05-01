@@ -14,15 +14,15 @@ import {
   loadPhoenix, loadJsrootGeometry, loadThreeFallback,
   applyOpacityToNamedGeometry, adjustPhoenixCamera, phoenixLastError,
   getLastEmcDebugInfo, refreshEmcDebugInfo,
-} from "./loader.js?v=emcdbg5";
+} from "./loader.js?v=emcdbg6";
 import {
   buildCustomEventOverlay, clearCustomEventOverlay, trackCandidateCache, clearTrackCandidateCache,
-} from "./event-renderer.js?v=emcdbg5";
+} from "./event-renderer.js?v=emcdbg6";
 import {
   interactionState, init as initPid, scheduleBindTrackInteractions,
   bindTrackInteractionsIfNeeded, refreshTrackSelectionVisuals,
   hideTrackHoverTip, renderTrackInfoPanel,
-} from "./pid-interaction.js?v=emcdbg5";
+} from "./pid-interaction.js?v=emcdbg6";
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ let currentOverlayGroup  = null;
 let loaderProgressValue  = 10;
 let importInProgress     = false;
 let emcDebugTimer        = null;
-const EMC_DEBUG_SCHEMA_EXPECT = "emc-debug-v5";
+const EMC_DEBUG_SCHEMA_EXPECT = "emc-debug-v6";
 
 // ── loader progress ───────────────────────────────────────────────────────────
 
