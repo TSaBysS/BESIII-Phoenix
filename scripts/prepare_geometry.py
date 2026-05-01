@@ -133,7 +133,7 @@ def _fit_trap_from_irregbox(child: ET.Element):
     }
 
 
-def convert_irregbox(root: ET.Element):
+def convert_irregbox(root: ET.Element, mode: str = "box"):
     solids = root.find("solids")
     if solids is None:
         return 0, 0
@@ -143,8 +143,8 @@ def convert_irregbox(root: ET.Element):
         if child.tag != "irregBox":
             continue
         idx = list(solids).index(child)
-        trap_attr = _fit_trap_from_irregbox(child)
-        if trap_attr is not None:
+        trap_attr = _fit_trap_from_irregbox(child) if mode == "trap" else None
+        if mode == "trap" and trap_attr is not None:
             new_solid = ET.Element("trap", trap_attr)
             converted_trap += 1
         else:
@@ -207,7 +207,7 @@ def rename_duplicate_physvol_names(root: ET.Element) -> int:
 def cmd_approximate(args: argparse.Namespace) -> int:
     tree = ET.parse(args.input_gdml)
     root = tree.getroot()
-    ci_trap, ci_box = convert_irregbox(root)
+    ci_trap, ci_box = convert_irregbox(root, mode=args.irreg_mode)
     ct = convert_twistedtubs_to_tubs(root)
     cr = rename_duplicate_physvol_names(root)
     tree.write(args.output_gdml, encoding="utf-8", xml_declaration=True)
@@ -282,6 +282,12 @@ def main() -> int:
     p_approx = sub.add_parser("approximate", help="Replace unsupported GDML solids and deduplicate physvol names.")
     p_approx.add_argument("input_gdml")
     p_approx.add_argument("output_gdml")
+    p_approx.add_argument(
+        "--irreg-mode",
+        choices=["box", "trap"],
+        default="box",
+        help="Approximation mode for irregBox (default: box for Phoenix compatibility).",
+    )
 
     p_split = sub.add_parser("split-mdc", help="Split MDC GDML into inner/outer sub-views.")
     p_split.add_argument("input_gdml")
