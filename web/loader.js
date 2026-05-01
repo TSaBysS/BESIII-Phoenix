@@ -95,16 +95,23 @@ function withGeometryCacheBust(path) {
 
 function findNamedGeometryRoots(geometries, objectName) {
   if (!geometries || !objectName) return [];
-  const exact = geometries.getObjectByName?.(objectName);
-  if (exact) return [exact];
   const roots = [];
+  const seen = new Set();
+  const exact = geometries.getObjectByName?.(objectName);
+  if (exact) {
+    roots.push(exact);
+    seen.add(exact);
+  }
   const key = String(objectName).toLowerCase();
   geometries.traverse?.((obj) => {
     const n = String(obj?.name || "").toLowerCase();
     if (!n) return;
     // Fallback for Phoenix builds that preserve original GDML volume names
     // (e.g. logicalEMC) instead of the loadRootJSONGeometry alias.
-    if (n.includes(key)) roots.push(obj);
+    if (n.includes(key) && !seen.has(obj)) {
+      roots.push(obj);
+      seen.add(obj);
+    }
   });
   return roots;
 }

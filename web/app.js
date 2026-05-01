@@ -13,15 +13,15 @@ import {
   getGeometryList, assembledComponents,
   loadPhoenix, loadJsrootGeometry, loadThreeFallback,
   applyOpacityToNamedGeometry, adjustPhoenixCamera, phoenixLastError,
-} from "./loader.js?v=emcdbg8";
+} from "./loader.js?v=emcdbg9";
 import {
   buildCustomEventOverlay, clearCustomEventOverlay, trackCandidateCache, clearTrackCandidateCache,
-} from "./event-renderer.js?v=emcdbg8";
+} from "./event-renderer.js?v=emcdbg9";
 import {
   interactionState, init as initPid, scheduleBindTrackInteractions,
   bindTrackInteractionsIfNeeded, refreshTrackSelectionVisuals,
   hideTrackHoverTip, renderTrackInfoPanel,
-} from "./pid-interaction.js?v=emcdbg8";
+} from "./pid-interaction.js?v=emcdbg9";
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
